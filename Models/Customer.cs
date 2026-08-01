@@ -9,6 +9,8 @@ namespace dotnet_101.Models
 
         public string City { get; set; } = null!;
 
+        public DateOnly JoinedDate { get; set; }
+
         public ICollection<Order> Orders { get; set; } = new List<Order>();
     }
 }
