@@ -1,0 +1,156 @@
+<title>Lección 5 · T-SQL fundamentals + stored procedures</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Lección 5 de 7 · Día 2 (sábado)</p>
+<h1>T-SQL: queries, JOINs y stored procedures</h1>
+<p class="kicker">Objetivo: leer y escribir SELECTs con JOINs y agregaciones, y crear un stored procedure simple con parámetros.</p>
+
+<p>SQL es declarativo, no imperativo — le decís <em>qué</em> querés, no <em>cómo</em> conseguirlo. Es el cambio mental más grande viniendo de JS. Pensalo como describir el resultado final de un <code>.filter().map()</code> encadenado, pero el motor decide el orden de ejecución real.</p>
+
+<h2>1. SELECT básico</h2>
+<pre><code>SELECT Name, Price
+FROM Products
+WHERE Price &gt; 100
+ORDER BY Price DESC;
+</code></pre>
+<table>
+<tr><th>SQL</th><th>Equivalente mental en JS</th></tr>
+<tr><td><code>SELECT Name, Price</code></td><td><code>.map(p =&gt; ({ name: p.Name, price: p.Price }))</code></td></tr>
+<tr><td><code>WHERE Price &gt; 100</code></td><td><code>.filter(p =&gt; p.Price &gt; 100)</code></td></tr>
+<tr><td><code>ORDER BY Price DESC</code></td><td><code>.sort((a, b) =&gt; b.Price - a.Price)</code></td></tr>
+</table>
+
+<h2>2. JOIN: combinar dos tablas por una clave</h2>
+<p>Un JOIN es exactamente lo que harías en JS para "enriquecer" un array cruzándolo con otro por id:</p>
+<pre><code>// JS: cruzar orders con customers por CustomerId
+orders.map(o =&gt; ({
+  ...o,
+  customerName: customers.find(c =&gt; c.Id === o.CustomerId)?.Name
+}));
+</code></pre>
+<pre><code>-- T-SQL equivalente
+SELECT o.Id, o.Total, c.Name AS CustomerName
+FROM Orders o
+INNER JOIN Customers c ON o.CustomerId = c.Id;
+</code></pre>
+
+<table>
+<tr><th>Tipo de JOIN</th><th>Qué devuelve</th><th>Equivalente JS</th></tr>
+<tr><td><code>INNER JOIN</code></td><td>Solo filas que hacen match en ambas tablas</td><td><code>.find()</code> que descarta los <code>undefined</code></td></tr>
+<tr><td><code>LEFT JOIN</code></td><td>Todas las filas de la izquierda, con <code>NULL</code> si no hay match a la derecha</td><td><code>.find()</code> que conserva el resultado aunque sea <code>undefined</code></td></tr>
+</table>
+
+<div class="callout warn">
+<code>LEFT JOIN</code> es el que más se usa mal en entrevistas: si necesitás "todos los clientes, tengan o no órdenes", es <code>LEFT JOIN</code> desde <code>Customers</code>. Si usás <code>INNER JOIN</code> ahí, perdés los clientes sin órdenes silenciosamente — un bug clásico.
+</div>
+
+<h2>3. Agregaciones: GROUP BY</h2>
+<pre><code>SELECT CustomerId, COUNT(*) AS OrderCount, SUM(Total) AS TotalSpent
+FROM Orders
+GROUP BY CustomerId
+HAVING SUM(Total) &gt; 1000;
+</code></pre>
+<table>
+<tr><th>Cláusula</th><th>Qué hace</th><th>Equivalente JS</th></tr>
+<tr><td><code>GROUP BY</code></td><td>Agrupa filas por una columna</td><td><code>Object.groupBy()</code> / <code>reduce</code> en un mapa por clave</td></tr>
+<tr><td><code>COUNT/SUM/AVG</code></td><td>Agregan valores dentro de cada grupo</td><td><code>.length</code> / <code>.reduce((a,b)=&gt;a+b)</code> por grupo</td></tr>
+<tr><td><code>HAVING</code></td><td>Filtra <em>después</em> de agrupar (WHERE filtra antes)</td><td><code>.filter()</code> aplicado al resultado ya agrupado</td></tr>
+</table>
+
+<div class="callout tip">
+Orden lógico de ejecución (no el orden en que lo escribís): <code>FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY</code>. Por eso <code>WHERE</code> no puede filtrar por un alias definido en <code>SELECT</code>, pero <code>ORDER BY</code> sí puede.
+</div>
+
+<h2>4. Stored procedures</h2>
+<p>Un stored procedure es como una función exportada que vive dentro de la base de datos: recibe parámetros, ejecuta T-SQL, opcionalmente retorna un result set.</p>
+<pre><code>CREATE PROCEDURE GetOrdersByCustomer
+    @CustomerId INT,
+    @MinTotal DECIMAL(10,2) = 0        -- parámetro opcional con default
+AS
+BEGIN
+    SELECT Id, Total, OrderDate
+    FROM Orders
+    WHERE CustomerId = @CustomerId
+      AND Total &gt;= @MinTotal
+    ORDER BY OrderDate DESC;
+END;
+</code></pre>
+<pre><code>-- Ejecutarlo:
+EXEC GetOrdersByCustomer @CustomerId = 42, @MinTotal = 100;
+</code></pre>
+
+<table>
+<tr><th>Pieza</th><th>Nota</th></tr>
+<tr><td><code>@CustomerId</code></td><td>Los parámetros siempre llevan <code>@</code> — equivalente a un parámetro de función</td></tr>
+<tr><td><code>AS BEGIN ... END</code></td><td>El cuerpo del "función" — puede tener múltiples statements, variables, lógica condicional</td></tr>
+<tr><td>¿Por qué usarlos?</td><td>Reutilización, seguridad (evita SQL injection al parametrizar), y a veces mejor performance porque el plan de ejecución se cachea</td></tr>
+</table>
+
+<p class="source">Fuentes principales: <a href="https://learn.microsoft.com/en-us/sql/t-sql/tutorial-writing-transact-sql-statements" target="_blank">T-SQL Tutorial: Write Transact-SQL Statements</a> y <a href="https://learn.microsoft.com/en-us/sql/relational-databases/stored-procedures/create-a-stored-procedure" target="_blank">Create a stored procedure</a> — Microsoft Learn.</p>
+
+<h2>Ejercicio práctico</h2>
+<p>Sin mirar arriba: escribí un stored procedure <code>GetTopCustomers</code> que reciba un parámetro <code>@MinOrders INT</code> y devuelva <code>CustomerId</code> y la cantidad de órdenes, solo para clientes con al menos <code>@MinOrders</code> órdenes, ordenado de mayor a menor cantidad.</p>
+
+<div class="quiz-recall">
+  <p class="quiz-q">Compará tu respuesta antes de seguir.</p>
+  <button class="quiz-reveal-btn">Mostrar respuesta</button>
+  <p class="quiz-answer" hidden><pre><code>CREATE PROCEDURE GetTopCustomers
+    @MinOrders INT
+AS
+BEGIN
+    SELECT CustomerId, COUNT(*) AS OrderCount
+    FROM Orders
+    GROUP BY CustomerId
+    HAVING COUNT(*) &gt;= @MinOrders
+    ORDER BY OrderCount DESC;
+END;</code></pre></p>
+</div>
+
+<h2>Retrieval practice</h2>
+<div class="quiz-mc" data-correct="1">
+  <p class="quiz-q">Querés "todos los clientes, tengan o no órdenes registradas". ¿Qué JOIN usás, empezando desde Customers?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">INNER JOIN</button>
+    <button class="quiz-opt">LEFT JOIN</button>
+    <button class="quiz-opt">CROSS JOIN</button>
+    <button class="quiz-opt">SELF JOIN</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="2">
+  <p class="quiz-q">¿Qué cláusula filtra filas DESPUÉS de que ya se agruparon con GROUP BY?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">WHERE</button>
+    <button class="quiz-opt">ORDER</button>
+    <button class="quiz-opt">HAVING</button>
+    <button class="quiz-opt">SELECT</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">Los parámetros de un stored procedure en T-SQL se declaran anteponiendo qué símbolo al nombre?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">@</button>
+    <button class="quiz-opt">$</button>
+    <button class="quiz-opt">#</button>
+    <button class="quiz-opt">%</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="ask-agent">
+Si el ejercicio del stored procedure no te salió a la primera, no pasa nada — es normal viniendo de cero en SQL. Preguntame para revisarlo juntos antes de seguir con la lección 6.
+</div>
+
+<div class="callout tip">
+¿Querés practicar JOINs de varias tablas con feedback real e inmediato (no solo leer/revelar)? La <a href="0008-tsql-joins-practice.html">lección 8</a> tiene un motor SQL interactivo en el navegador con 6 ejercicios progresivos sobre un esquema de 5 tablas.
+</div>
+
+<div class="nav">
+  <a href="0004-project-setup.html">← Lección 4: Creando tu proyecto y conexión a SQL Server</a>
+  <a href="0000-project-roadmap.html">Índice</a>
+  <a href="0006-ef-core-repository-pattern.html">Siguiente: EF Core + repository pattern →</a>
+</div>
+<script src="../assets/quiz.js"></script>

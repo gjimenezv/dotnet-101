@@ -1,0 +1,156 @@
+<title>Lección 1 · C# fundamentals para devs de JS</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Lección 1 de 7 · Día 1 (viernes)</p>
+<h1>C# para alguien que ya piensa en JS/TS</h1>
+<p class="kicker">Objetivo: en 15 minutos, poder leer y escribir C# básico usando lo que ya sabés de JavaScript/TypeScript como andamiaje.</p>
+
+<p>No vas a aprender C# desde cero — vas a <em>traducir</em> lo que ya sabés. TypeScript y C# comparten padre espiritual (ambos con tipado estático, ambos orientados a objetos, sintaxis de llaves), así que la mayor parte del trabajo es mapear vocabulario, no aprender conceptos nuevos.</p>
+
+<div class="callout bridge">
+Regla general: si algo existe en TypeScript con tipos estrictos, probablemente existe en C# con un nombre parecido. Las diferencias reales están en <strong>cómo se ejecuta</strong> (compilado a IL + CLR, no borrado a JS) y en que <strong>todo vive dentro de una clase</strong>.
+</div>
+
+<h2>1. Tipado: de TS a C#</h2>
+<p>En TS, el tipado es una capa que se borra al compilar a JS ("type erasure"). En C#, el tipado es real en tiempo de ejecución: el compilador y el CLR lo hacen cumplir siempre, no hay "modo JS" de escape.</p>
+
+<table>
+<tr><th>TypeScript</th><th>C#</th><th>Nota</th></tr>
+<tr><td><code>let x: number = 5</code></td><td><code>int x = 5;</code></td><td>Punto y coma obligatorio</td></tr>
+<tr><td><code>let x = 5</code> (inferido)</td><td><code>var x = 5;</code></td><td><code>var</code> infiere el tipo, pero sigue siendo <em>estático</em> — no es <code>any</code></td></tr>
+<tr><td><code>const</code></td><td><code>const</code> o <code>readonly</code></td><td><code>const</code> = valor fijo en compilación; <code>readonly</code> = fijo tras el constructor</td></tr>
+<tr><td><code>string \| null</code></td><td><code>string?</code></td><td>Nullable reference types, similar a <code>strictNullChecks</code></td></tr>
+<tr><td>template literal <code>`Hola ${x}`</code></td><td><code>$"Hola {x}"</code></td><td>String interpolation, casi idéntico</td></tr>
+<tr><td><code>interface</code></td><td><code>interface</code> o <code>record</code></td><td><code>record</code> = tipo inmutable con igualdad por valor, muy usado para DTOs</td></tr>
+</table>
+
+<h2>2. Todo vive dentro de una clase</h2>
+<p>En JS podés tener funciones sueltas a nivel de módulo. En C#, casi todo — incluso el <code>Main</code> de entrada — vive dentro de una <code>class</code>. Esto no es opcional, es la razón por la que vas a ver <code>public class Foo { }</code> en todos lados.</p>
+
+<pre><code>// TypeScript
+function add(a: number, b: number): number {
+  return a + b;
+}
+
+// C#
+public class MathHelper
+{
+    public int Add(int a, int b)
+    {
+        return a + b;
+    }
+}
+</code></pre>
+
+<table>
+<tr><th>Modificador</th><th>Equivalente mental en TS</th></tr>
+<tr><td><code>public</code></td><td>exportado, visible desde fuera de la clase</td></tr>
+<tr><td><code>private</code></td><td><code>private</code> en TS — mismo nombre, mismo concepto</td></tr>
+<tr><td><code>static</code></td><td>método/propiedad de la clase, no de la instancia (igual que en JS)</td></tr>
+</table>
+
+<h2>3. Propiedades: el <code>{ get; set; }</code> que no existe en TS</h2>
+<p>En TS escribís <code>getters</code>/<code>setters</code> a mano si los necesitás. En C#, las <strong>propiedades</strong> son un ciudadano de primera clase — se ven como un campo público pero son azúcar sintáctica sobre un getter/setter:</p>
+
+<pre><code>public class User
+{
+    public string Name { get; set; }        // como una propiedad pública mutable
+    public string Email { get; init; }       // solo se puede setear al crear el objeto
+    public int Age { get; private set; }     // se lee desde afuera, se escribe solo desde adentro
+}
+</code></pre>
+
+<p>Vas a ver esto <strong>constantemente</strong> en DTOs y modelos de Entity Framework — es la forma estándar de definir un "shape" de datos, equivalente a un <code>interface</code> de TS pero con comportamiento real.</p>
+
+<h2>4. Async/await: mismo keyword, motor distinto</h2>
+<p>La sintaxis es casi calcada — eso es la buena noticia.</p>
+
+<table>
+<tr><th>TypeScript</th><th>C#</th></tr>
+<tr><td><code>Promise&lt;T&gt;</code></td><td><code>Task&lt;T&gt;</code></td></tr>
+<tr><td><code>async function f(): Promise&lt;number&gt;</code></td><td><code>async Task&lt;int&gt; F()</code></td></tr>
+<tr><td><code>await fetch(url)</code></td><td><code>await httpClient.GetAsync(url)</code></td></tr>
+<tr><td><code>Promise.all([...])</code></td><td><code>Task.WhenAll(...)</code></td></tr>
+</table>
+
+<div class="callout tip">
+Convención de nombres en C#: cualquier método async termina en <code>Async</code> — <code>GetUserAsync()</code>, no <code>GetUser()</code>. Vas a ver esto todo el tiempo en código .NET real y en la prueba del domingo.
+</div>
+
+<h2>5. <code>using</code> es tu <code>import</code></h2>
+<pre><code>// TypeScript
+import { UserService } from "./services/user-service";
+
+// C#
+using MyApp.Services;
+</code></pre>
+<p>Diferencia clave: <code>using</code> importa un <strong>namespace</strong> completo (una carpeta lógica de clases), no un archivo específico. No hay equivalente exacto a <code>import { X } from "./file"</code> — el "archivo" es invisible, solo importa a qué namespace pertenece la clase.</p>
+
+<h2>6. LINQ: tu <code>.map()</code>/<code>.filter()</code>, con esteroides</h2>
+<p>Esto se profundiza en la lección de Entity Framework, pero adelantamos el mapeo mental porque lo vas a ver en cualquier código C# de nivel medio:</p>
+
+<table>
+<tr><th>JS/TS (Array)</th><th>C# (LINQ)</th></tr>
+<tr><td><code>arr.filter(x => x.age > 18)</code></td><td><code>arr.Where(x => x.Age > 18)</code></td></tr>
+<tr><td><code>arr.map(x => x.name)</code></td><td><code>arr.Select(x => x.Name)</code></td></tr>
+<tr><td><code>arr.find(x => x.id === 1)</code></td><td><code>arr.FirstOrDefault(x => x.Id == 1)</code></td></tr>
+<tr><td><code>arr.reduce(...)</code></td><td><code>arr.Aggregate(...)</code></td></tr>
+</table>
+<p class="source">Fuente principal de esta lección: <a href="https://learn.microsoft.com/en-us/dotnet/csharp/tour-of-csharp/tips-for-javascript-developers" target="_blank">Tips for JavaScript and TypeScript Developers — Microsoft Learn</a>. Para el panorama completo del lenguaje: <a href="https://learn.microsoft.com/en-us/dotnet/csharp/tour-of-csharp/" target="_blank">A tour of C#</a>.</p>
+
+<h2>Retrieval practice</h2>
+<p>Respondé de memoria antes de mirar la tabla de arriba — eso es lo que realmente fija el conocimiento.</p>
+
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">En C#, si querés que el compilador infiera el tipo automáticamente (como la inferencia de TS), ¿qué palabra clave usás para declarar la variable?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">var</button>
+    <button class="quiz-opt">let</button>
+    <button class="quiz-opt">def</button>
+    <button class="quiz-opt">int</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">Un método async en C# retorna un objeto de tipo ___ (el equivalente directo de Promise en JS).</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Task</button>
+    <button class="quiz-opt">Void</button>
+    <button class="quiz-opt">Bool</button>
+    <button class="quiz-opt">Long</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">¿Qué palabra clave en C# es el equivalente directo de <code>import</code> en JS/TS para traer un namespace?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">using</button>
+    <button class="quiz-opt">yield</button>
+    <button class="quiz-opt">throw</button>
+    <button class="quiz-opt">catch</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-recall">
+  <p class="quiz-q">¿Cuál es la diferencia clave entre el tipado de TypeScript y el de C#? (pensalo antes de revelar)</p>
+  <button class="quiz-reveal-btn">Mostrar respuesta</button>
+  <p class="quiz-answer" hidden>TypeScript usa tipado estructural que se <strong>borra por completo</strong> al compilar a JS (no existe en runtime). C# usa tipado nominal que el CLR <strong>aplica en tiempo de ejecución</strong> — los tipos son reales incluso después de compilar, no hay forma de "engañar" al sistema de tipos como con un <code>as any</code> disfrazado.</p>
+</div>
+
+<h2>Antes de pasar a la lección 2</h2>
+<div class="callout tip">
+Si tenés 10 minutos extra: instalá el <a href="https://dotnet.microsoft.com/download" target="_blank">.NET SDK</a> o abrí <a href="https://dotnetfiddle.net/" target="_blank">dotnetfiddle.net</a> (sin instalar nada) y escribí una clase con 2 propiedades y un método que las use. Ejecutarlo aunque sea una vez fija mucho más que solo leer.
+</div>
+
+<div class="ask-agent">
+¿Algo no cuadró? Preguntame directamente — soy tu profesor en esto. Especialmente si algo de la tabla de LINQ o de propiedades no te quedó claro, vale la pena resolverlo ahora antes de construir la API en la lección 2.
+</div>
+
+<div class="nav">
+  <a href="0000-project-roadmap.html">← Índice del proyecto</a>
+  <a href="0002-oop-fundamentals.html">Siguiente: Clases, objetos y OOP en C# →</a>
+</div>
+<script src="../assets/quiz.js"></script>

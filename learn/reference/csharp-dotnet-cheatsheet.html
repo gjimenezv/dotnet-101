@@ -1,0 +1,120 @@
+<title>Referencia · C# / ASP.NET Core</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Referencia rápida</p>
+<h1>C# / ASP.NET Core — cheat sheet</h1>
+<p class="kicker">De <a href="../lessons/0001-csharp-fundamentals-for-js-devs.html">lección 1</a>, <a href="../lessons/0002-oop-fundamentals.html">lección 2</a> y <a href="../lessons/0003-aspnet-core-web-api.html">lección 3</a>. Pensado para repasar en 5 minutos antes de la prueba.</p>
+
+<h2>Sintaxis base (mapeo desde TS)</h2>
+<table>
+<tr><th>TS</th><th>C#</th></tr>
+<tr><td><code>let x = 5</code></td><td><code>var x = 5;</code></td></tr>
+<tr><td><code>string | null</code></td><td><code>string?</code></td></tr>
+<tr><td>template literal</td><td><code>$"Hola {x}"</code></td></tr>
+<tr><td><code>interface</code></td><td><code>record</code> / <code>interface</code></td></tr>
+<tr><td><code>import { X } from "./f"</code></td><td><code>using Namespace;</code></td></tr>
+<tr><td><code>Promise&lt;T&gt;</code></td><td><code>Task&lt;T&gt;</code></td></tr>
+<tr><td><code>async function f(): Promise&lt;number&gt;</code></td><td><code>async Task&lt;int&gt; F()</code></td></tr>
+</table>
+
+<h2>Propiedades</h2>
+<pre><code>public string Name { get; set; }     // mutable
+public string Email { get; init; }   // solo al crear
+public int Age { get; private set; } // lectura pública, escritura interna</code></pre>
+
+<h2>OOP: constructor, interface, herencia</h2>
+<pre><code>public interface IPaymentProcessor
+{
+    Task&lt;bool&gt; ProcessAsync(decimal amount);
+}
+
+public abstract class Shape
+{
+    public abstract double GetArea();          // sin cuerpo, obligatorio
+    public void Print() =&gt; Console.WriteLine(GetArea());
+}
+
+public class Circle : Shape                     // ": Shape" = herencia
+{
+    public double Radius { get; set; }
+    public Circle(double radius) { Radius = radius; }   // constructor
+    public override double GetArea() =&gt; Math.PI * Radius * Radius;
+}</code></pre>
+<table>
+<tr><th>Modificador</th><th>Acceso</th></tr>
+<tr><td><code>public</code></td><td>Cualquiera</td></tr>
+<tr><td><code>private</code></td><td>Solo la misma clase</td></tr>
+<tr><td><code>protected</code></td><td>La clase y sus clases hijas</td></tr>
+<tr><td><code>internal</code></td><td>Mismo proyecto/assembly</td></tr>
+</table>
+<table>
+<tr><th></th><th>Interface</th><th>Abstract class</th></tr>
+<tr><td>Implementación</td><td>Ninguna</td><td>Puede tener métodos ya implementados</td></tr>
+<tr><td>Herencia múltiple</td><td>Sí (implementa varias)</td><td>No (hereda de una sola)</td></tr>
+</table>
+<p><code>base(...)</code> = llama al constructor del padre. <code>virtual</code>/<code>override</code> = habilita/ejecuta sobreescritura de un método.</p>
+
+<h2>LINQ ↔ Array de JS</h2>
+<table>
+<tr><th>JS</th><th>LINQ</th></tr>
+<tr><td><code>.filter()</code></td><td><code>.Where()</code></td></tr>
+<tr><td><code>.map()</code></td><td><code>.Select()</code></td></tr>
+<tr><td><code>.find()</code></td><td><code>.FirstOrDefault()</code></td></tr>
+<tr><td><code>.reduce()</code></td><td><code>.Aggregate()</code></td></tr>
+<tr><td><code>.sort()</code></td><td><code>.OrderBy() / .OrderByDescending()</code></td></tr>
+</table>
+
+<h2>Controller mínimo</h2>
+<pre><code>[ApiController]
+[Route("api/[controller]")]
+public class ProductsController : ControllerBase
+{
+    private readonly IProductService _service;
+    public ProductsController(IProductService service) =&gt; _service = service;
+
+    [HttpGet]
+    public async Task&lt;ActionResult&lt;List&lt;ProductDto&gt;&gt;&gt; GetAll()
+        =&gt; Ok(await _service.GetAllAsync());
+
+    [HttpGet("{id}")]
+    public async Task&lt;ActionResult&lt;ProductDto&gt;&gt; GetById(int id)
+    {
+        var p = await _service.GetByIdAsync(id);
+        return p is null ? NotFound() : Ok(p);
+    }
+
+    [HttpPost]
+    public async Task&lt;ActionResult&lt;ProductDto&gt;&gt; Create(CreateProductDto input)
+    {
+        var created = await _service.CreateAsync(input);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    [HttpDelete("{id}")]
+    public async Task&lt;IActionResult&gt; Delete(int id)
+        =&gt; await _service.DeleteAsync(id) ? NoContent() : NotFound();
+}</code></pre>
+
+<h2>Dependency Injection — Program.cs</h2>
+<pre><code>builder.Services.AddScoped&lt;IProductService, ProductService&gt;();
+builder.Services.AddControllers();
+app.MapControllers();</code></pre>
+<table>
+<tr><th>Lifetime</th><th>Cuándo</th></tr>
+<tr><td><code>AddSingleton</code></td><td>Una instancia global (config, caché)</td></tr>
+<tr><td><code>AddScoped</code></td><td>Una por request — default para servicios de datos</td></tr>
+<tr><td><code>AddTransient</code></td><td>Nueva instancia cada vez — servicios livianos</td></tr>
+</table>
+
+<h2>Códigos de respuesta comunes</h2>
+<table>
+<tr><td><code>Ok(x)</code></td><td>200</td></tr>
+<tr><td><code>CreatedAtAction(...)</code></td><td>201</td></tr>
+<tr><td><code>NoContent()</code></td><td>204</td></tr>
+<tr><td><code>BadRequest()</code></td><td>400</td></tr>
+<tr><td><code>NotFound()</code></td><td>404</td></tr>
+</table>
+
+<div class="nav">
+  <a href="../lessons/0001-csharp-fundamentals-for-js-devs.html">← Volver a las lecciones</a>
+</div>

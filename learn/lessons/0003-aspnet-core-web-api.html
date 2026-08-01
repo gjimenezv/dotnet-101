@@ -1,0 +1,162 @@
+<title>Lección 3 · Web API con ASP.NET Core</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Lección 3 de 7 · Día 1 (viernes)</p>
+<h1>Construir una Web API con ASP.NET Core</h1>
+<p class="kicker">Objetivo: poder escribir un controller con endpoints CRUD, entender DTOs e inyección de dependencias — el core de "robust, scalable APIs" que pide el puesto.</p>
+
+<p>Pensá en esto como el equivalente de un router de Express + controladores, pero con el tipado y la estructura de clases que ya viste en la <a href="0001-csharp-fundamentals-for-js-devs.html">lección 1</a>.</p>
+
+<h2>1. Anatomía mínima de un proyecto ASP.NET Core</h2>
+<table>
+<tr><th>Archivo</th><th>Equivalente mental en Node/Express</th></tr>
+<tr><td><code>Program.cs</code></td><td><code>app.js</code> / <code>server.ts</code> — arranca el servidor, registra servicios y middleware</td></tr>
+<tr><td><code>Controllers/ProductsController.cs</code></td><td><code>routes/products.js</code> + el handler, combinados en una clase</td></tr>
+<tr><td><code>appsettings.json</code></td><td><code>.env</code> / <code>config.json</code></td></tr>
+<tr><td><code>*.csproj</code></td><td><code>package.json</code></td></tr>
+</table>
+
+<h2>2. Un controller de punta a punta</h2>
+<pre><code>[ApiController]
+[Route("api/[controller]")]           // "api/products"
+public class ProductsController : ControllerBase
+{
+    private readonly IProductService _service;
+
+    public ProductsController(IProductService service)   // ← inyección de dependencias
+    {
+        _service = service;
+    }
+
+    [HttpGet]
+    public async Task&lt;ActionResult&lt;List&lt;ProductDto&gt;&gt;&gt; GetAll()
+    {
+        var products = await _service.GetAllAsync();
+        return Ok(products);              // 200 + body
+    }
+
+    [HttpGet("{id}")]                     // "api/products/5"
+    public async Task&lt;ActionResult&lt;ProductDto&gt;&gt; GetById(int id)
+    {
+        var product = await _service.GetByIdAsync(id);
+        if (product is null) return NotFound();     // 404
+        return Ok(product);
+    }
+
+    [HttpPost]
+    public async Task&lt;ActionResult&lt;ProductDto&gt;&gt; Create(CreateProductDto input)
+    {
+        var created = await _service.CreateAsync(input);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);  // 201
+    }
+}
+</code></pre>
+
+<table>
+<tr><th>Pieza</th><th>Qué hace</th></tr>
+<tr><td><code>[ApiController]</code></td><td>Activa validación automática de modelo, binding inteligente — "modo API" de la clase</td></tr>
+<tr><td><code>[Route("api/[controller]")]</code></td><td>Define el prefijo de URL; <code>[controller]</code> se reemplaza por el nombre sin "Controller"</td></tr>
+<tr><td><code>[HttpGet]</code>, <code>[HttpPost]</code>...</td><td>Igual que <code>router.get()</code>, <code>router.post()</code> en Express, pero como atributo sobre el método</td></tr>
+<tr><td><code>ActionResult&lt;T&gt;</code></td><td>Permite retornar tanto el objeto <code>T</code> como códigos HTTP (<code>NotFound()</code>, <code>Ok()</code>, <code>BadRequest()</code>)</td></tr>
+</table>
+
+<h2>3. DTOs: nunca expongas tu modelo de base de datos directo</h2>
+<p>Un DTO (Data Transfer Object) es un <code>record</code> o clase simple que define exactamente qué forma tiene el JSON que entra/sale — no el modelo completo de la base de datos. Es el mismo instinto que ya tenés en React cuando no mandás el objeto completo del backend al componente.</p>
+
+<pre><code>public record ProductDto(int Id, string Name, decimal Price);
+public record CreateProductDto(string Name, decimal Price);
+</code></pre>
+
+<div class="callout tip">
+<code>record</code> con esta sintaxis ("positional record") genera automáticamente constructor, propiedades <code>get</code>-only e igualdad por valor. Es la forma más rápida de definir un DTO — pensalo como un <code>type ProductDto = { id: number; name: string; price: number }</code> de TS, pero con identidad de clase real.
+</div>
+
+<h2>4. Inyección de dependencias (DI): el contenedor hace el <code>new</code> por vos</h2>
+<p>En <code>Program.cs</code> registrás qué implementación usar para cada interfaz:</p>
+<pre><code>var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddScoped&lt;IProductService, ProductService&gt;();
+builder.Services.AddControllers();
+
+var app = builder.Build();
+app.MapControllers();
+app.Run();
+</code></pre>
+<p>Cuando ASP.NET Core crea un <code>ProductsController</code> para atender un request, mira el constructor, ve que pide un <code>IProductService</code>, y te lo entrega automáticamente — vos nunca escribís <code>new ProductService()</code> a mano. Es el mismo patrón que un container de DI en Angular, o pasar dependencias explícitas por parámetro en un factory de JS, pero automatizado.</p>
+
+<table>
+<tr><th>Lifetime</th><th>Cuándo usarlo</th></tr>
+<tr><td><code>AddSingleton</code></td><td>Una instancia para toda la vida de la app (ej. configuración, caché en memoria)</td></tr>
+<tr><td><code>AddScoped</code></td><td>Una instancia por request HTTP — el default para servicios que usan la base de datos</td></tr>
+<tr><td><code>AddTransient</code></td><td>Instancia nueva cada vez que se pide — para servicios livianos sin estado</td></tr>
+</table>
+
+<h2>5. La alternativa: Minimal API</h2>
+<p>Desde .NET 6+, existe una forma sin controllers, más parecida a Express directamente:</p>
+<pre><code>app.MapGet("/api/products/{id}", async (int id, IProductService service) =>
+{
+    var product = await service.GetByIdAsync(id);
+    return product is null ? Results.NotFound() : Results.Ok(product);
+});
+</code></pre>
+<p class="source">Fuentes principales: <a href="https://learn.microsoft.com/en-us/aspnet/core/tutorials/first-web-api" target="_blank">Tutorial: Create a controller-based web API with ASP.NET Core</a> y <a href="https://learn.microsoft.com/en-us/aspnet/core/tutorials/min-web-api" target="_blank">Tutorial: Create a Minimal API</a> — Microsoft Learn.</p>
+
+<h2>Ejercicio práctico</h2>
+<p>Sin mirar arriba: escribí (en papel, notas, o un editor) un endpoint <code>DELETE /api/products/{id}</code> dentro de <code>ProductsController</code>. Debe: recibir el <code>id</code>, llamar a <code>_service.DeleteAsync(id)</code>, y devolver <code>204 No Content</code> si funcionó o <code>404</code> si el producto no existía.</p>
+
+<div class="quiz-recall">
+  <p class="quiz-q">Compará tu respuesta contra esta antes de seguir.</p>
+  <button class="quiz-reveal-btn">Mostrar respuesta</button>
+  <p class="quiz-answer" hidden><pre><code>[HttpDelete("{id}")]
+public async Task&lt;IActionResult&gt; Delete(int id)
+{
+    var deleted = await _service.DeleteAsync(id);
+    if (!deleted) return NotFound();
+    return NoContent();
+}</code></pre></p>
+</div>
+
+<h2>Retrieval practice</h2>
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">¿Qué atributo definís sobre un método de controller para que responda a peticiones GET?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">[HttpGet]</button>
+    <button class="quiz-opt">[HttpPost]</button>
+    <button class="quiz-opt">[HttpRead]</button>
+    <button class="quiz-opt">[HttpFind]</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="2">
+  <p class="quiz-q">¿Qué lifetime de DI usarías por default para un servicio que consulta la base de datos en cada request?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">AddSingle</button>
+    <button class="quiz-opt">AddGlobal</button>
+    <button class="quiz-opt">AddScoped</button>
+    <button class="quiz-opt">AddShared</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="1">
+  <p class="quiz-q">¿Por qué se usa un DTO en vez de retornar el modelo de base de datos directo desde el controller?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Corre más rápido en el servidor de la aplicación</button>
+    <button class="quiz-opt">Controla qué campos se exponen en el contrato de la API</button>
+    <button class="quiz-opt">Es requerido por el compilador de C# para compilar</button>
+    <button class="quiz-opt">Permite que Entity Framework genere las migraciones</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="ask-agent">
+¿Se te complicó el ejercicio del DELETE, o algo de DI no cerró? Preguntame — es mejor resolverlo ahora que llegar a la prueba del domingo con la duda.
+</div>
+
+<div class="nav">
+  <a href="0002-oop-fundamentals.html">← Lección 2: Clases, objetos y OOP</a>
+  <a href="0000-project-roadmap.html">Índice</a>
+  <a href="0004-project-setup.html">Siguiente: Creando tu proyecto y conexión a SQL Server →</a>
+</div>
+<script src="../assets/quiz.js"></script>

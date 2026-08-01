@@ -1,0 +1,224 @@
+<title>Lección 8 · Práctica de JOINs complejos</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Lección 8 · Práctica extra (multi-tabla)</p>
+<h1>T-SQL en la práctica: JOINs complejos con varias tablas</h1>
+<p class="kicker">Objetivo: escribir queries reales contra un esquema de 5 tablas — JOINs de 2, 3 y 4 tablas, LEFT JOIN, GROUP BY/HAVING y subqueries — con feedback inmediato.</p>
+
+<p class="sql-engine-status callout tip">Cargando motor SQL…</p>
+
+<div class="callout warn">
+Este motor corre <strong>SQLite</strong> en el navegador (vía WebAssembly), no SQL Server — es la única forma de darte feedback real e inmediato sin instalar nada. La lógica de JOINs/GROUP BY/subqueries es <strong>idéntica</strong> a T-SQL, pero hay diferencias de sintaxis que NO practiques acá: T-SQL usa <code>TOP n</code> (SQLite usa <code>LIMIT</code>), <code>GETDATE()</code> (SQLite usa <code>date('now')</code>), y SQLite no tiene stored procedures. Para esas particularidades, repasá la <a href="0005-tsql-fundamentals.html">lección 5</a> y el <a href="../reference/tsql-cheatsheet.html">cheat sheet de T-SQL</a>.
+</div>
+
+<h2>El esquema: mini e-commerce</h2>
+<pre><code>Categories(Id, Name)
+Products(Id, Name, CategoryId → Categories, Price)
+Customers(Id, Name, City, JoinedDate)
+Orders(Id, CustomerId → Customers, OrderDate, Status)
+OrderItems(Id, OrderId → Orders, ProductId → Products, Quantity, UnitPrice)</code></pre>
+<p>Ya está cargado con datos de ejemplo: 8 clientes (2 sin ninguna orden todavía), 5 categorías, 12 productos, 13 órdenes con distintos estados (<code>Shipped</code>, <code>Pending</code>, <code>Cancelled</code>), y sus items.</p>
+
+<h2>Probá el motor</h2>
+<div class="sql-exercise">
+  <p class="quiz-q">Query de calentamiento — solo apretá "Ejecutar" para ver que funciona, después modificala si querés.</p>
+  <textarea class="sql-input" rows="3">SELECT * FROM Customers;</textarea>
+  <div class="sql-controls">
+    <button class="sql-run-btn">Ejecutar</button>
+  </div>
+  <div class="sql-result"></div>
+</div>
+
+<h2>Ejercicio 1 — INNER JOIN (2 tablas)</h2>
+<div class="sql-exercise">
+  <p class="quiz-q">Listá el Id de orden, el nombre del cliente y la fecha, solo para órdenes con estado <code>'Shipped'</code>.</p>
+  <textarea class="sql-input" rows="4">-- tu query acá
+</textarea>
+  <div class="sql-controls">
+    <button class="sql-run-btn">Ejecutar</button>
+    <button class="sql-reveal-btn">Ver solución</button>
+  </div>
+  <div class="sql-result"></div>
+  <pre class="sql-solution" hidden><code>SELECT o.Id, c.Name AS CustomerName, o.OrderDate
+FROM Orders o
+INNER JOIN Customers c ON o.CustomerId = c.Id
+WHERE o.Status = 'Shipped';</code></pre>
+</div>
+
+<h2>Ejercicio 2 — LEFT JOIN (encontrar lo que falta)</h2>
+<div class="sql-exercise">
+  <p class="quiz-q">Listá los clientes que <strong>nunca</strong> hicieron un pedido (ni siquiera uno cancelado o pendiente).</p>
+  <textarea class="sql-input" rows="4">-- tu query acá
+</textarea>
+  <div class="sql-controls">
+    <button class="sql-run-btn">Ejecutar</button>
+    <button class="sql-reveal-btn">Ver solución</button>
+  </div>
+  <div class="sql-result"></div>
+  <pre class="sql-solution" hidden><code>SELECT c.Id, c.Name
+FROM Customers c
+LEFT JOIN Orders o ON o.CustomerId = c.Id
+WHERE o.Id IS NULL;</code></pre>
+</div>
+
+<h2>Ejercicio 3 — JOIN de 3 tablas + agregación</h2>
+<div class="sql-exercise">
+  <p class="quiz-q">Para cada orden con estado <code>'Shipped'</code>, calculá el total (<code>SUM(Quantity * UnitPrice)</code>) y mostrá también el nombre del cliente. Ordená de mayor a menor total.</p>
+  <textarea class="sql-input" rows="4">-- tu query acá
+</textarea>
+  <div class="sql-controls">
+    <button class="sql-run-btn">Ejecutar</button>
+    <button class="sql-reveal-btn">Ver solución</button>
+  </div>
+  <div class="sql-result"></div>
+  <pre class="sql-solution" hidden><code>SELECT o.Id AS OrderId, c.Name AS CustomerName,
+       SUM(oi.Quantity * oi.UnitPrice) AS OrderTotal
+FROM Orders o
+INNER JOIN Customers c ON c.Id = o.CustomerId
+INNER JOIN OrderItems oi ON oi.OrderId = o.Id
+WHERE o.Status = 'Shipped'
+GROUP BY o.Id, c.Name
+ORDER BY OrderTotal DESC;</code></pre>
+  <div class="callout warn">
+  ¿Por qué <code>GROUP BY o.Id, c.Name</code> y no solo <code>o.Id</code>? Regla de SQL estándar: toda columna en el <code>SELECT</code> que no esté dentro de una función de agregación (<code>SUM</code>, <code>COUNT</code>...) debe estar en el <code>GROUP BY</code>. <code>o.Id</code> y <code>c.Name</code> van sueltas, <code>SUM(...)</code> ya está agregada. <strong>SQLite es permisivo</strong> y te deja agrupar solo por <code>o.Id</code> (elige cualquier valor de <code>c.Name</code>); <strong>SQL Server/T-SQL es estricto</strong> y tira error de compilación si falta una columna no agregada en el GROUP BY. Si te aparece ese error en la prueba, es justo esto.
+  </div>
+</div>
+
+<h2>Ejercicio 4 — JOIN de 4 tablas + HAVING</h2>
+<div class="sql-exercise">
+  <p class="quiz-q">¿Qué categorías generaron más de $150 en ventas, contando solo órdenes <code>'Shipped'</code>? Mostrá el nombre de la categoría y el total, ordenado de mayor a menor.</p>
+  <textarea class="sql-input" rows="4">-- tu query acá
+</textarea>
+  <div class="sql-controls">
+    <button class="sql-run-btn">Ejecutar</button>
+    <button class="sql-reveal-btn">Ver solución</button>
+  </div>
+  <div class="sql-result"></div>
+  <pre class="sql-solution" hidden><code>SELECT cat.Name AS CategoryName,
+       SUM(oi.Quantity * oi.UnitPrice) AS TotalRevenue
+FROM Categories cat
+INNER JOIN Products p ON p.CategoryId = cat.Id
+INNER JOIN OrderItems oi ON oi.ProductId = p.Id
+INNER JOIN Orders o ON o.Id = oi.OrderId
+WHERE o.Status = 'Shipped'
+GROUP BY cat.Name
+HAVING SUM(oi.Quantity * oi.UnitPrice) > 150
+ORDER BY TotalRevenue DESC;</code></pre>
+</div>
+
+<h2>Ejercicio 5 — Subquery: por encima del promedio</h2>
+<div class="sql-exercise">
+  <p class="quiz-q">¿Qué clientes gastaron (en órdenes <code>'Shipped'</code>) más que el promedio de gasto por cliente? Mostrá nombre y total gastado.</p>
+  <div class="callout tip">Pista: primero armá una subquery que calcule el total por cliente; después promediá esos totales; después comparás con <code>HAVING</code>.</div>
+  <textarea class="sql-input" rows="4">-- tu query acá
+</textarea>
+  <div class="sql-controls">
+    <button class="sql-run-btn">Ejecutar</button>
+    <button class="sql-reveal-btn">Ver solución</button>
+  </div>
+  <div class="sql-result"></div>
+  <pre class="sql-solution" hidden><code>SELECT c.Name, SUM(oi.Quantity * oi.UnitPrice) AS TotalSpent
+FROM Customers c
+INNER JOIN Orders o ON o.CustomerId = c.Id
+INNER JOIN OrderItems oi ON oi.OrderId = o.Id
+WHERE o.Status = 'Shipped'
+GROUP BY c.Id, c.Name
+HAVING SUM(oi.Quantity * oi.UnitPrice) > (
+    SELECT AVG(CustomerTotal) FROM (
+        SELECT SUM(oi2.Quantity * oi2.UnitPrice) AS CustomerTotal
+        FROM Orders o2
+        INNER JOIN OrderItems oi2 ON oi2.OrderId = o2.Id
+        WHERE o2.Status = 'Shipped'
+        GROUP BY o2.CustomerId
+    )
+);</code></pre>
+</div>
+
+<h2>Ejercicio 6 — el más difícil: COUNT(DISTINCT) a través de 4 tablas</h2>
+<div class="sql-exercise">
+  <p class="quiz-q">¿Qué clientes compraron productos de <strong>más de 2 categorías distintas</strong> (en cualquier estado de orden)? Mostrá el nombre del cliente y la cantidad de categorías distintas, ordenado de mayor a menor.</p>
+  <textarea class="sql-input" rows="4">-- tu query acá
+</textarea>
+  <div class="sql-controls">
+    <button class="sql-run-btn">Ejecutar</button>
+    <button class="sql-reveal-btn">Ver solución</button>
+  </div>
+  <div class="sql-result"></div>
+  <pre class="sql-solution" hidden><code>SELECT c.Name, COUNT(DISTINCT p.CategoryId) AS DistinctCategories
+FROM Customers c
+INNER JOIN Orders o ON o.CustomerId = c.Id
+INNER JOIN OrderItems oi ON oi.OrderId = o.Id
+INNER JOIN Products p ON p.Id = oi.ProductId
+GROUP BY c.Id, c.Name
+HAVING COUNT(DISTINCT p.CategoryId) > 2
+ORDER BY DistinctCategories DESC;</code></pre>
+</div>
+
+<div class="ask-agent">
+Si te trabaste en el ejercicio 5 o 6 (subqueries y COUNT DISTINCT son los que más cuestan), preguntame — puedo armarte una versión intermedia más simple del mismo ejercicio para llegar ahí en pasos.
+</div>
+
+<script type="application/sql" id="sql-seed">
+CREATE TABLE Categories (Id INTEGER PRIMARY KEY, Name TEXT NOT NULL);
+CREATE TABLE Products (Id INTEGER PRIMARY KEY, Name TEXT NOT NULL, CategoryId INTEGER NOT NULL, Price REAL NOT NULL);
+CREATE TABLE Customers (Id INTEGER PRIMARY KEY, Name TEXT NOT NULL, City TEXT NOT NULL, JoinedDate TEXT NOT NULL);
+CREATE TABLE Orders (Id INTEGER PRIMARY KEY, CustomerId INTEGER NOT NULL, OrderDate TEXT NOT NULL, Status TEXT NOT NULL);
+CREATE TABLE OrderItems (Id INTEGER PRIMARY KEY, OrderId INTEGER NOT NULL, ProductId INTEGER NOT NULL, Quantity INTEGER NOT NULL, UnitPrice REAL NOT NULL);
+
+INSERT INTO Categories (Id, Name) VALUES
+ (1,'Electronics'),(2,'Home'),(3,'Toys'),(4,'Books'),(5,'Sports');
+
+INSERT INTO Products (Id, Name, CategoryId, Price) VALUES
+ (1,'Laptop',1,899.99),(2,'Mouse',1,25.50),(3,'Keyboard',1,45.00),
+ (4,'Blender',2,60.00),(5,'Toaster',2,35.00),
+ (6,'LEGO Set',3,79.99),(7,'Puzzle',3,15.00),
+ (8,'Novel: Dune',4,18.00),(9,'Cookbook',4,22.50),
+ (10,'Yoga Mat',5,30.00),(11,'Dumbbells',5,55.00),(12,'Tennis Racket',5,89.00);
+
+INSERT INTO Customers (Id, Name, City, JoinedDate) VALUES
+ (1,'Ana García','San José','2024-01-10'),
+ (2,'Luis Rojas','Heredia','2024-02-15'),
+ (3,'María Fernández','Cartago','2024-03-01'),
+ (4,'Carlos Vindas','Alajuela','2024-03-20'),
+ (5,'Sofía Mora','San José','2024-04-05'),
+ (6,'Diego Salas','Limón','2024-05-11'),
+ (7,'Valentina Chaves','Heredia','2024-06-02'),
+ (8,'Andrés Solano','Cartago','2024-06-15');
+
+INSERT INTO Orders (Id, CustomerId, OrderDate, Status) VALUES
+ (1,1,'2024-06-01','Shipped'),
+ (2,1,'2024-06-20','Shipped'),
+ (3,2,'2024-06-05','Pending'),
+ (4,3,'2024-06-07','Shipped'),
+ (5,3,'2024-07-01','Cancelled'),
+ (6,4,'2024-06-10','Shipped'),
+ (7,5,'2024-06-12','Shipped'),
+ (8,5,'2024-06-25','Pending'),
+ (9,8,'2024-06-18','Shipped'),
+ (10,1,'2024-07-05','Shipped'),
+ (11,4,'2024-07-10','Shipped'),
+ (12,2,'2024-07-12','Shipped'),
+ (13,8,'2024-07-15','Shipped');
+
+INSERT INTO OrderItems (Id, OrderId, ProductId, Quantity, UnitPrice) VALUES
+ (1,1,1,1,899.99),(2,1,2,2,25.50),
+ (3,2,6,1,79.99),(4,2,8,1,18.00),
+ (5,10,10,1,30.00),
+ (6,3,3,1,45.00),
+ (7,12,7,2,15.00),(8,12,11,1,55.00),
+ (9,4,4,1,60.00),(10,4,9,1,22.50),
+ (11,5,5,1,35.00),
+ (12,6,1,1,899.99),
+ (13,11,12,1,89.00),(14,11,10,2,30.00),
+ (15,7,2,3,25.50),
+ (16,8,6,1,79.99),
+ (17,9,8,2,18.00),(18,9,9,1,22.50),
+ (19,13,3,1,45.00),(20,13,4,1,60.00),(21,13,11,1,55.00);
+</script>
+
+<div class="nav">
+  <a href="0007-migrations.html">← Lección 7: migraciones paso a paso</a>
+  <a href="0000-project-roadmap.html">Índice</a>
+  <a href="0009-repository-structure.html">Siguiente: organizando Models y Repositories →</a>
+</div>
+<script src="../assets/sql-runner.js"></script>

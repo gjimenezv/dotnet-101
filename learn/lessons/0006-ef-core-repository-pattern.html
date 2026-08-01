@@ -1,0 +1,234 @@
+<title>Lección 6 · EF Core + repository pattern</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Lección 6 de 7 · Día 2 (sábado)</p>
+<h1>Entity Framework Core y el repository pattern</h1>
+<p class="kicker">Objetivo: usar EF Core para leer/escribir datos con LINQ, saber cuándo bajar a SQL crudo o a un stored procedure, y poder explicar con criterio cuándo (y por qué) agregar una capa de repository encima.</p>
+
+<p>Esta lección conecta las piezas anteriores: los DTOs de la <a href="0003-aspnet-core-web-api.html">lección 3</a>, el LINQ que adelantamos en la <a href="0001-csharp-fundamentals-for-js-devs.html">lección 1</a>, y las tablas de la <a href="0005-tsql-fundamentals.html">lección 5</a> — EF Core es la capa que las une.</p>
+
+<h2>1. ¿Qué es EF Core?</h2>
+<p>Un ORM (Object-Relational Mapper): traduce clases de C# a tablas SQL y viceversa, para que escribas LINQ en vez de T-SQL a mano en tu código de aplicación. Es similar a lo que Prisma o TypeORM hacen en el mundo Node — si conocés alguno, la mecánica mental es la misma.</p>
+
+<pre><code>public class AppDbContext : DbContext
+{
+    public DbSet&lt;Product&gt; Products { get; set; }
+    public DbSet&lt;Order&gt; Orders { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity&lt;Product&gt;()
+            .Property(p =&gt; p.Price)
+            .HasColumnType("decimal(10,2)");
+    }
+}
+
+public class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public decimal Price { get; set; }
+}
+</code></pre>
+
+<table>
+<tr><th>Concepto</th><th>Qué es</th></tr>
+<tr><td><code>DbContext</code></td><td>La conexión + sesión de trabajo con la base de datos — se registra en DI como <code>AddScoped</code> (una instancia por request, igual que vimos en la lección 2)</td></tr>
+<tr><td><code>DbSet&lt;T&gt;</code></td><td>Representa una tabla; permite consultarla y modificarla con LINQ</td></tr>
+<tr><td>Migrations</td><td><code>dotnet ef migrations add InitialCreate</code> genera el script de cambios; <code>dotnet ef database update</code> lo aplica — el equivalente a un sistema de migraciones tipo Prisma/Knex</td></tr>
+</table>
+
+<h2>2. LINQ to Entities: tu .filter()/.map() ahora hablan SQL</h2>
+<p>Lo que en la lección 1 vimos como analogía, acá es literal: EF Core traduce estas expresiones LINQ a SQL real, ejecutado en el servidor — no en memoria.</p>
+
+<pre><code>// Trae solo productos caros, ordenados — se traduce a un SELECT ... WHERE ... ORDER BY real
+var expensiveProducts = await _context.Products
+    .Where(p =&gt; p.Price &gt; 100)
+    .OrderByDescending(p =&gt; p.Price)
+    .ToListAsync();
+
+// JOIN implícito vía navegación de propiedades
+var ordersWithCustomer = await _context.Orders
+    .Include(o =&gt; o.Customer)          // como un LEFT JOIN explícito
+    .Where(o =&gt; o.Total &gt; 1000)
+    .ToListAsync();
+</code></pre>
+
+<div class="callout warn">
+<code>.Where()</code> antes de <code>.ToListAsync()</code> se ejecuta <strong>en la base de datos</strong> (SQL real). Si llamás <code>.ToList()</code> primero y filtrás después, estás trayendo toda la tabla a memoria y filtrando en C# — un error de performance clásico que sí te pueden preguntar en la prueba.
+</div>
+
+<h2>3. CRUD con EF Core</h2>
+<pre><code>// Create
+_context.Products.Add(new Product { Name = "Mouse", Price = 25.99m });
+await _context.SaveChangesAsync();
+
+// Update — EF trackea el cambio automáticamente
+var product = await _context.Products.FindAsync(id);
+product.Price = 19.99m;
+await _context.SaveChangesAsync();
+
+// Delete
+_context.Products.Remove(product);
+await _context.SaveChangesAsync();
+</code></pre>
+<p><code>SaveChangesAsync()</code> es la clave: EF Core acumula cambios en memoria (tracking) y los aplica todos juntos en una transacción cuando lo llamás — no hay un statement SQL por cada línea de C#.</p>
+
+<h2>4. Repository pattern: ¿encima de EF Core, o no?</h2>
+<p>Acá viene la pregunta que más se presta a confusión — y la que probablemente te van a hacer en la entrevista.</p>
+
+<div class="callout bridge">
+Microsoft aclara algo importante en su propia documentación: EF Core <strong>ya implementa</strong> Repository y Unit of Work internamente. <code>DbContext</code> es tu Unit of Work; cada <code>DbSet&lt;T&gt;</code> es, en esencia, un Repository. Envolver eso en tu propia interfaz <code>IProductRepository</code> no es "la forma correcta", es una decisión de trade-off.
+</div>
+
+<table>
+<tr><th>Agregar una capa repository propia</th><th>Usar DbContext/DbSet directo</th></tr>
+<tr><td>Más fácil de mockear en tests unitarios sin base de datos real</td><td>Menos código, menos indirección — más simple de leer</td></tr>
+<tr><td>Aísla tu dominio de detalles de EF Core (útil si algún día cambiás de ORM)</td><td>Acceso completo a LINQ y features de EF Core sin fricción</td></tr>
+<tr><td>Tiene sentido en apps grandes/complejas con lógica de acceso a datos repetida</td><td>Tiene sentido en apps chicas/medianas o cuando el equipo ya usa EF Core como su capa de abstracción</td></tr>
+</table>
+
+<p>Ejemplo de repository pattern clásico, para reconocerlo si aparece en la prueba:</p>
+<pre><code>public interface IProductRepository
+{
+    Task&lt;Product?&gt; GetByIdAsync(int id);
+    Task&lt;List&lt;Product&gt;&gt; GetAllAsync();
+    Task AddAsync(Product product);
+}
+
+public class ProductRepository : IProductRepository
+{
+    private readonly AppDbContext _context;
+    public ProductRepository(AppDbContext context) =&gt; _context = context;
+
+    public Task&lt;Product?&gt; GetByIdAsync(int id) =&gt;
+        _context.Products.FirstOrDefaultAsync(p =&gt; p.Id == id);
+
+    public Task&lt;List&lt;Product&gt;&gt; GetAllAsync() =&gt;
+        _context.Products.ToListAsync();
+
+    public async Task AddAsync(Product product)
+    {
+        _context.Products.Add(product);
+        await _context.SaveChangesAsync();
+    }
+}
+</code></pre>
+<p>Y se registra en DI exactamente como el <code>IProductService</code> de la lección 2: <code>builder.Services.AddScoped&lt;IProductRepository, ProductRepository&gt;();</code></p>
+
+<p class="source">Fuentes principales: <a href="https://learn.microsoft.com/en-us/ef/core/" target="_blank">Overview of Entity Framework Core</a>, <a href="https://learn.microsoft.com/en-us/aspnet/core/data/ef-mvc/intro" target="_blank">Get started with EF Core in an ASP.NET MVC web app</a>, y <a href="https://learn.microsoft.com/en-us/aspnet/mvc/overview/older-versions/getting-started-with-ef-5-using-mvc-4/implementing-the-repository-and-unit-of-work-patterns-in-an-asp-net-mvc-application" target="_blank">Implementing the Repository and Unit of Work Patterns</a> — Microsoft Learn.</p>
+
+<h2>5. Cuándo LINQ no alcanza: SQL crudo y stored procedures</h2>
+<p>LINQ cubre la mayoría de los casos, pero hay cosas que no puede expresar: recursión (CTEs recursivos), window functions (<code>RANK() OVER (PARTITION BY...)</code>), o llamar un stored procedure ya existente. Para eso EF Core te deja bajar a SQL crudo sin perder el resto de la infraestructura (DI, DbContext, tracking).</p>
+
+<table>
+<tr><th>Método</th><th>Para qué</th><th>Devuelve</th></tr>
+<tr><td><code>FromSqlRaw</code> / <code>FromSqlInterpolated</code></td><td>SELECT que mapea a un tipo (entidad o keyless) — sigue siendo <code>IQueryable</code>, se puede encadenar más LINQ después</td><td>Filas tipadas</td></tr>
+<tr><td><code>ExecuteSqlRawAsync</code> / <code>ExecuteSqlInterpolatedAsync</code></td><td>INSERT/UPDATE/DELETE, o un EXEC que no devuelve filas</td><td><code>int</code> (filas afectadas)</td></tr>
+</table>
+
+<div class="callout warn">
+Usá siempre <code>FromSqlInterpolated</code> (con <code>$"..."</code>) o pasá los parámetros como argumentos extra de <code>FromSqlRaw</code> — <strong>nunca</strong> concatenés el valor directo en el string. EF Core parametriza automáticamente en ambos casos; concatenar a mano te expone a SQL injection, el mismo error que en cualquier otro lenguaje.
+</div>
+
+<p><strong>Caso 1 — el resultado es una entidad completa</strong> (ej. productos con precio mayor a X): es directo, porque las columnas calzan 1 a 1 con tu clase <code>Product</code>.</p>
+<pre><code>var caros = await _context.Products
+    .FromSqlInterpolated($"SELECT * FROM Products WHERE Price &gt; {minPrice}")
+    .ToListAsync();
+</code></pre>
+
+<p><strong>Caso 2 — el resultado NO es una entidad</strong> (ej. el stored procedure <code>GetTopCustomers</code> de la lección 5 devuelve <code>CustomerId</code> + <code>OrderCount</code>, no un <code>Customer</code> completo). Necesitás un tipo "keyless" — una clase sin PK, registrada en el modelo solo para mapear ese resultado:</p>
+<pre><code>// Un DTO simple, sin Id
+public class TopCustomerResult
+{
+    public int CustomerId { get; set; }
+    public int OrderCount { get; set; }
+}
+
+// En OnModelCreating de tu DbContext:
+modelBuilder.Entity&lt;TopCustomerResult&gt;().HasNoKey();
+
+// En el repository:
+var top = await _context.Database
+    .SqlQueryRaw&lt;TopCustomerResult&gt;("EXEC GetTopCustomers @MinOrders = {0}", minOrders)
+    .ToListAsync();
+</code></pre>
+
+<p class="source">Fuente: <a href="https://learn.microsoft.com/en-us/ef/core/querying/sql-queries" target="_blank">Querying with raw SQL in EF Core</a> — Microsoft Learn.</p>
+
+<h2>Ejercicio práctico</h2>
+<p>Sin mirar arriba: escribí una consulta LINQ contra <code>_context.Orders</code> que devuelva los pedidos de un cliente específico (<code>customerId</code>) con total mayor a 500, ordenados por fecha descendente.</p>
+
+<div class="quiz-recall">
+  <p class="quiz-q">Compará tu respuesta antes de seguir.</p>
+  <button class="quiz-reveal-btn">Mostrar respuesta</button>
+  <p class="quiz-answer" hidden><pre><code>var orders = await _context.Orders
+    .Where(o =&gt; o.CustomerId == customerId &amp;&amp; o.Total &gt; 500)
+    .OrderByDescending(o =&gt; o.OrderDate)
+    .ToListAsync();</code></pre></p>
+</div>
+
+<h2>Retrieval practice</h2>
+<div class="quiz-mc" data-correct="1">
+  <p class="quiz-q">Según la documentación de Microsoft, ¿qué es el DbContext de EF Core, conceptualmente?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Un archivo de configuración de conexión</button>
+    <button class="quiz-opt">El Unit of Work de la sesión de datos</button>
+    <button class="quiz-opt">Un middleware de autenticación HTTP</button>
+    <button class="quiz-opt">Un generador de código de controllers</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">¿Qué método hace falta llamar para que los cambios trackeados por EF Core (Add/Remove/edición de propiedad) se apliquen realmente en la base de datos?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">SaveChangesAsync</button>
+    <button class="quiz-opt">CommitAsync</button>
+    <button class="quiz-opt">FlushAsync</button>
+    <button class="quiz-opt">PersistAsync</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="2">
+  <p class="quiz-q">Llamás <code>.ToList()</code> sobre <code>_context.Products</code> y DESPUÉS le aplicás <code>.Where(p =&gt; p.Price &gt; 100)</code> en C#. ¿Cuál es el problema?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">El código no compila por tipos incompatibles</button>
+    <button class="quiz-opt">EF Core lanza una excepción de tracking</button>
+    <button class="quiz-opt">Trae toda la tabla a memoria antes de filtrar</button>
+    <button class="quiz-opt">El resultado queda desordenado siempre</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<h2>Checkpoint del proyecto</h2>
+<p>En tu propio proyecto (el que creaste en la lección 4): escribí el modelo <code>Category</code> y agregalo a tu <code>DbContext</code>, como ejemplo de punta a punta:</p>
+<pre><code>// Models/Category.cs
+public class Category
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = null!;
+    public ICollection&lt;Product&gt; Products { get; set; } = new List&lt;Product&gt;();
+}
+
+// Data/TuDbContext.cs
+public class TuDbContext : DbContext
+{
+    public TuDbContext(DbContextOptions&lt;TuDbContext&gt; options) : base(options) { }
+
+    public DbSet&lt;Category&gt; Categories =&gt; Set&lt;Category&gt;();
+}
+</code></pre>
+<p>Ahora hacé lo mismo vos para <code>Product</code>, <code>Customer</code>, <code>Order</code>, <code>OrderItem</code> y <code>Employee</code> — con sus campos y relaciones según la <a href="0000-project-roadmap.html">definición del proyecto</a>. Todavía no corras <code>dotnet ef migrations add</code>: ese comando es el tema completo de la próxima lección.</p>
+
+<div class="ask-agent">
+Esta es probablemente la lección más densa hasta ahora — si la pregunta de repository pattern vs. DbContext directo no te quedó clara, es justo el tipo de pregunta conceptual que te pueden hacer en la entrevista. Preguntame y la repasamos con otro ejemplo. Y si al escribir las 6 entidades te trabás en cómo modelar <code>Employee</code> (la auto-referencia a sí misma), avisame antes de adivinar.
+</div>
+
+<div class="nav">
+  <a href="0005-tsql-fundamentals.html">← Lección 5: T-SQL fundamentals</a>
+  <a href="0000-project-roadmap.html">Índice</a>
+  <a href="0007-migrations.html">Siguiente: migraciones paso a paso →</a>
+</div>
+<script src="../assets/quiz.js"></script>

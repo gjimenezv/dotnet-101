@@ -1,0 +1,228 @@
+<title>Lección 2 · Clases, objetos y OOP en C#</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Lección 2 de 7 · Día 1 (viernes)</p>
+<h1>Clases, constructores y OOP en C#</h1>
+<p class="kicker">Objetivo: recordar cómo se arma una clase — constructor, modificadores de acceso, interfaces, clases abstractas, herencia — porque todo lo que viene (controllers, DI, EF Core) es esto.</p>
+
+<p>C# es un lenguaje orientado a objetos "de verdad": no hay forma de escribir código fuera de una clase. JS te dejaba usar objetos, funciones sueltas o clases como te convenga; C# te obliga a pensar en términos de clases, contratos (interfaces) y jerarquías. Vale la pena fijar esto bien porque el <a href="0003-aspnet-core-web-api.html">controller</a> y la <a href="0006-ef-core-repository-pattern.html">inyección de dependencias</a> de las próximas lecciones son, literalmente, esto en acción.</p>
+
+<h2>1. Anatomía de una clase</h2>
+<pre><code>public class User
+{
+    // campos/propiedades — el "shape" del objeto
+    public string Name { get; set; }
+    public string Email { get; set; }
+
+    // constructor — se ejecuta al hacer "new User(...)"
+    public User(string name, string email)
+    {
+        Name = name;
+        Email = email;
+    }
+
+    // método — comportamiento
+    public string GetGreeting()
+    {
+        return $"Hola, {Name}";
+    }
+}
+</code></pre>
+<pre><code>var user = new User("Gabriela", "gabi@mail.com");   // llama al constructor
+Console.WriteLine(user.GetGreeting());
+</code></pre>
+
+<h2>2. El constructor, en detalle</h2>
+<p>El constructor es un método especial con el <strong>mismo nombre que la clase</strong>, sin tipo de retorno, que corre una sola vez cuando creás el objeto con <code>new</code>. Es el equivalente directo del <code>constructor()</code> de una clase de JS/TS.</p>
+
+<table>
+<tr><th>JS/TS</th><th>C#</th></tr>
+<tr><td><code>class User { constructor(name) { this.name = name; } }</code></td><td><code>public User(string name) { Name = name; }</code></td></tr>
+<tr><td><code>this.name</code></td><td><code>this.Name</code> (o simplemente <code>Name</code> si no hay ambigüedad)</td></tr>
+</table>
+
+<div class="callout tip">
+Si no escribís ningún constructor, C# te da uno vacío gratis ("default constructor", sin parámetros). Pero en cuanto definís <strong>un</strong> constructor con parámetros, ese regalo desaparece — si todavía querés poder hacer <code>new User()</code> sin argumentos, tenés que escribirlo vos, explícitamente, además del otro. Podés tener varios constructores con distinta cantidad/tipo de parámetros (overloading).
+</div>
+
+<pre><code>public class User
+{
+    public string Name { get; set; }
+
+    public User() { Name = "Anónimo"; }              // constructor sin parámetros
+    public User(string name) { Name = name; }          // constructor con parámetro
+}
+</code></pre>
+
+<h2>3. Modificadores de acceso</h2>
+<p>Determinan quién puede ver/usar un miembro de la clase — el equivalente de <code>public</code>/<code>private</code> de TS, pero con más granularidad.</p>
+
+<table>
+<tr><th>Modificador</th><th>Quién puede acceder</th></tr>
+<tr><td><code>public</code></td><td>Cualquiera, desde cualquier lugar</td></tr>
+<tr><td><code>private</code></td><td>Solo desde dentro de la misma clase (default si no ponés nada)</td></tr>
+<tr><td><code>protected</code></td><td>La misma clase, y cualquier clase que herede de ella</td></tr>
+<tr><td><code>internal</code></td><td>Cualquier clase dentro del mismo proyecto/assembly, pero no desde otro proyecto</td></tr>
+<tr><td><code>protected internal</code></td><td>Unión de <code>protected</code> e <code>internal</code></td></tr>
+</table>
+
+<div class="callout bridge">
+TS solo tiene <code>public</code>/<code>private</code>/<code>protected</code>, y esos modificadores desaparecen al compilar a JS (son una ficción del compilador). En C# son reales: el CLR los aplica en tiempo de ejecución — no hay forma de acceder a un <code>private</code> desde afuera, ni con trucos.
+</div>
+
+<h2>4. Interfaces: un contrato, sin implementación</h2>
+<p>Una interfaz define <em>qué</em> métodos/propiedades debe tener una clase, sin decir <em>cómo</em> los implementa. Convención: el nombre empieza con <code>I</code>.</p>
+
+<pre><code>public interface IPaymentProcessor
+{
+    Task&lt;bool&gt; ProcessAsync(decimal amount);
+}
+
+public class CreditCardProcessor : IPaymentProcessor
+{
+    public async Task&lt;bool&gt; ProcessAsync(decimal amount)
+    {
+        // implementación real acá
+        return true;
+    }
+}
+</code></pre>
+<p>Una clase puede implementar <strong>varias</strong> interfaces a la vez (a diferencia de la herencia de clases, que es de una sola). Esto es exactamente lo que viste en la <a href="0003-aspnet-core-web-api.html">lección de Web API</a>: <code>IProductService</code>/<code>ProductService</code> es este mismo patrón — el controller depende de la interfaz, no de la clase concreta, y el contenedor de DI decide qué implementación inyectar.</p>
+
+<h2>5. Clases abstractas: a mitad de camino</h2>
+<p>Una clase <code>abstract</code> no se puede instanciar directamente (<code>new</code> falla) — existe solo para que otras clases hereden de ella. Puede mezclar métodos ya implementados con métodos <code>abstract</code> que las clases hijas están obligadas a completar.</p>
+
+<pre><code>public abstract class Shape
+{
+    public abstract double GetArea();            // sin cuerpo — obligatorio implementarlo
+
+    public void PrintArea()                        // con cuerpo — se hereda tal cual
+    {
+        Console.WriteLine($"Área: {GetArea()}");
+    }
+}
+
+public class Circle : Shape
+{
+    public double Radius { get; set; }
+    public override double GetArea() =&gt; Math.PI * Radius * Radius;
+}
+</code></pre>
+
+<table>
+<tr><th></th><th>Interface</th><th>Abstract class</th></tr>
+<tr><td>Implementación</td><td>Ninguna (solo firma)</td><td>Puede tener métodos ya implementados</td></tr>
+<tr><td>Herencia múltiple</td><td>Una clase implementa varias</td><td>Una clase hereda de una sola</td></tr>
+<tr><td>Estado (campos)</td><td>No</td><td>Sí, puede tener campos/propiedades con valor</td></tr>
+<tr><td>Cuándo usarla</td><td>Definir un contrato entre capas (ej. service ↔ controller)</td><td>Compartir código común entre clases muy relacionadas</td></tr>
+</table>
+
+<h2>6. Herencia: extender una clase</h2>
+<pre><code>public class Animal
+{
+    public string Name { get; set; }
+
+    public Animal(string name) { Name = name; }
+
+    public virtual string MakeSound() =&gt; "...";   // "virtual" = se puede sobreescribir
+}
+
+public class Dog : Animal
+{
+    public Dog(string name) : base(name) { }        // llama al constructor del padre
+
+    public override string MakeSound() =&gt; "Woof";   // sobreescribe el comportamiento
+}
+</code></pre>
+<table>
+<tr><th>Palabra clave</th><th>Qué hace</th></tr>
+<tr><td><code>: Animal</code></td><td>"Dog hereda de Animal" — equivalente a <code>class Dog extends Animal</code> en JS</td></tr>
+<tr><td><code>: base(name)</code></td><td>Llama al constructor de la clase padre — equivalente a <code>super(name)</code></td></tr>
+<tr><td><code>virtual</code></td><td>En el padre: "esto se puede sobreescribir"</td></tr>
+<tr><td><code>override</code></td><td>En el hijo: "estoy sobreescribiendo esto"</td></tr>
+</table>
+<div class="callout warn">
+C# solo permite herencia simple: una clase hereda de <strong>una sola</strong> clase base (a diferencia de interfaces, donde podés implementar varias). Si necesitás combinar comportamiento de múltiples fuentes, usá interfaces.
+</div>
+
+<p class="source">Fuentes principales: <a href="https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/tutorials/oop" target="_blank">Object-Oriented Programming — C#</a> y <a href="https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/object-oriented/inheritance" target="_blank">Object-oriented programming - inheritance</a> — Microsoft Learn.</p>
+
+<h2>Por qué esto importa para el puesto</h2>
+<div class="callout tip">
+Cuando en la lección 3 escribas <code>public ProductsController(IProductService service)</code>, eso es un <strong>constructor</strong> recibiendo una <strong>interfaz</strong> como parámetro. Cuando en la lección 6 EF Core defina <code>public class Product { get; set; }</code>, eso es una clase simple con propiedades. Todo el vocabulario de "robust, scalable APIs" del puesto se construye sobre estos 4 conceptos.
+</div>
+
+<h2>Ejercicio práctico</h2>
+<p>Sin mirar arriba: escribí una interfaz <code>INotifier</code> con un método <code>SendAsync(string message)</code>, y una clase <code>EmailNotifier</code> que la implemente con un constructor que reciba un <code>string fromAddress</code> y lo guarde en una propiedad.</p>
+
+<div class="quiz-recall">
+  <p class="quiz-q">Compará tu respuesta antes de seguir.</p>
+  <button class="quiz-reveal-btn">Mostrar respuesta</button>
+  <p class="quiz-answer" hidden><pre><code>public interface INotifier
+{
+    Task SendAsync(string message);
+}
+
+public class EmailNotifier : INotifier
+{
+    public string FromAddress { get; }
+
+    public EmailNotifier(string fromAddress)
+    {
+        FromAddress = fromAddress;
+    }
+
+    public async Task SendAsync(string message)
+    {
+        // lógica real de envío acá
+    }
+}</code></pre></p>
+</div>
+
+<h2>Retrieval practice</h2>
+<div class="quiz-mc" data-correct="1">
+  <p class="quiz-q">¿Cuál modificador de acceso permite que solo la propia clase y las clases que heredan de ella puedan usar un miembro?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">private</button>
+    <button class="quiz-opt">protected</button>
+    <button class="quiz-opt">internal</button>
+    <button class="quiz-opt">public</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="2">
+  <p class="quiz-q">¿Qué palabra clave usás en el constructor de una clase hija para llamar al constructor de la clase padre?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">super</button>
+    <button class="quiz-opt">this</button>
+    <button class="quiz-opt">base</button>
+    <button class="quiz-opt">root</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">Una clase necesita compartir el contrato con varias implementaciones distintas e intercambiables (como pasa con la inyección de dependencias). ¿Interface o abstract class es la elección típica?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Interface</button>
+    <button class="quiz-opt">Abstract class</button>
+    <button class="quiz-opt">Ambas dan igual siempre</button>
+    <button class="quiz-opt">Ninguna, usar static</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<h2>Checkpoint del proyecto</h2>
+<p>Todavía no hay proyecto creado (eso es la lección 4), pero adelantá el diseño: mirá el schema de 6 entidades en la <a href="0000-project-roadmap.html">definición del proyecto</a> y pensá, para <code>Product</code>, qué constructor(es) le pondrías y si alguna propiedad debería ser <code>init</code> en vez de <code>set</code> (por ejemplo, ¿tiene sentido reasignar el <code>Id</code> después de crearlo?). No hace falta escribir código todavía — es puro diseño mental.</p>
+
+<div class="ask-agent">
+Si algo de constructores, interfaces o herencia no terminó de cerrar, preguntame ahora — esto es la base de todo lo que sigue, vale la pena que quede firme antes de avanzar.
+</div>
+
+<div class="nav">
+  <a href="0001-csharp-fundamentals-for-js-devs.html">← Lección 1: C# fundamentals</a>
+  <a href="0000-project-roadmap.html">Índice</a>
+  <a href="0003-aspnet-core-web-api.html">Siguiente: Construir una Web API con ASP.NET Core →</a>
+</div>
+<script src="../assets/quiz.js"></script>

@@ -1,0 +1,177 @@
+<title>Lección 9 · Organizando Models y Repositories</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Lección 9 · Práctica extra (arquitectura)</p>
+<h1>Models vs Repositories: quién hace qué, y cómo se organizan</h1>
+<p class="kicker">Objetivo: saber identificar qué entidad necesita su propio repository, cómo estructurar las carpetas, y poder justificar cuándo está bien mezclar acceso directo con repository — la pregunta natural después de la lección 6.</p>
+
+<p>En la <a href="0006-ef-core-repository-pattern.html">lección 6</a> viste <em>qué</em> es el repository pattern. Acá va el paso siguiente, más práctico: cuando tenés 6 entidades en tu proyecto, ¿armás 6 repositories? ¿Dónde vive cada archivo? ¿Y está mal que algunas entidades usen repository y otras no?</p>
+
+<h2>1. La responsabilidad de cada carpeta</h2>
+<p>La distinción es simple una vez que la ves: <strong>Models describe qué es el dato. Repositories describe cómo se consigue/guarda.</strong></p>
+
+<table>
+<tr><th></th><th>Models</th><th>Repositories</th></tr>
+<tr><td>Contiene</td><td>Propiedades, navigation properties</td><td>LINQ, <code>.Include()</code>, <code>SaveChangesAsync()</code></td></tr>
+<tr><td>¿Conoce EF Core / <code>DbContext</code>?</td><td>No</td><td>Sí</td></tr>
+<tr><td>Cambia cuando...</td><td>cambia la forma del dato (agregás una columna)</td><td>cambia cómo lo consultás (una pregunta de negocio nueva)</td></tr>
+</table>
+
+<div class="callout bridge">
+Un <code>Customer.cs</code> es tu <code>interface Customer { ... }</code> de TypeScript — describe la forma, no sabe que existe una base de datos. Un <code>CustomerRepository.cs</code> es la función <code>fetchCustomer()</code> de tu API client — sabe cómo ir a buscarlo, pero no define qué es un cliente.
+</div>
+
+<h2>2. ¿Un repository por modelo?</h2>
+<p>No — un repository por <strong>aggregate root</strong>, no por modelo. Un aggregate root es una entidad que tiene sentido pedir/guardar <em>por sí sola</em>. Todo lo que solo existe <em>en el contexto de</em> otra entidad se consulta a través del repository de esa otra entidad.</p>
+
+<p><strong>La pregunta que lo decide:</strong> "¿alguna vez voy a decir <em>'dame este X'</em> sin pasar primero por otra entidad?" Si sí, tiene su propio repository. Si no, no.</p>
+
+<p>Aplicado al schema de tu proyecto (Categories/Products/Customers/Orders/OrderItems/Employees):</p>
+<table>
+<tr><th>Entidad</th><th>¿Repository propio?</th><th>Por qué</th></tr>
+<tr><td><code>Customer</code></td><td>Sí</td><td>Lo pedís directo: "dame los top spenders"</td></tr>
+<tr><td><code>Employee</code></td><td>Sí</td><td>Se consulta solo: "dame la cadena de jefes de este empleado"</td></tr>
+<tr><td><code>Product</code></td><td>Sí</td><td>Se lista y filtra de forma independiente</td></tr>
+<tr><td><code>Order</code></td><td>Sí</td><td>Se pide directo por su Id</td></tr>
+<tr><td><code>OrderItem</code></td><td><strong>No</strong></td><td>Nunca tiene sentido fuera de una Order — se consigue vía <code>orderRepository.GetByIdAsync(id)</code> con <code>.Include(o =&gt; o.Items)</code></td></tr>
+<tr><td><code>Category</code></td><td>Depende</td><td>Si solo la usás vía <code>Product.Category</code>, no. Si vas a listar categorías sueltas, sí.</td></tr>
+</table>
+
+<div class="callout warn">
+El error común es crear un repository por cada clase en <code>Models/</code> sin pensar en esto — termina siendo puro boilerplate (un <code>IOrderItemRepository</code> con un solo método que nadie llama directo). Si en la entrevista te preguntan por qué <code>OrderItem</code> no tiene repository, esta es la respuesta.
+</div>
+
+<h2>3. Estructura de carpetas</h2>
+<pre><code>ShopApi/
+  Models/              (ya lo tenés — entidades, sin lógica de acceso a datos)
+  Data/                (ya lo tenés — DbContext)
+  Repositories/
+    ICustomerRepository.cs
+    CustomerRepository.cs
+    IEmployeeRepository.cs
+    EmployeeRepository.cs
+    IProductRepository.cs
+    ProductRepository.cs
+  Controllers/
+    CustomersController.cs
+</code></pre>
+<p>Un archivo por tipo — interfaz e implementación separadas, pero en la misma carpeta (no <code>Repositories/Interfaces/</code> vs <code>Repositories/Implementations/</code>, eso es más ruido que ayuda). Carpeta plana; solo si el proyecto crece mucho tiene sentido anidar por agregado (<code>Repositories/Customers/</code>, <code>Repositories/Orders/</code>).</p>
+
+<h2>4. Crear y editar cada uno</h2>
+<p><strong>Un modelo se edita</strong> cuando cambia la forma del dato — agregás una propiedad, agregás una navigation property. No debería tener ningún <code>using Microsoft.EntityFrameworkCore</code> ni lógica de consulta adentro.</p>
+<pre><code>public class Customer
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = null!;
+    public string City { get; set; } = null!;
+    public DateTime JoinedDate { get; set; }
+    public ICollection&lt;Order&gt; Orders { get; set; } = new List&lt;Order&gt;();
+}
+</code></pre>
+
+<p><strong>Un repository se edita</strong> cuando necesitás una pregunta nueva contra la base de datos. El repository de <code>Order</code> es quien resuelve el acceso a <code>OrderItem</code> — fijate cómo <code>OrderItem</code> nunca aparece en su propia interfaz:</p>
+<pre><code>public interface IOrderRepository
+{
+    Task&lt;Order?&gt; GetByIdWithItemsAsync(int id);
+}
+
+public class OrderRepository : IOrderRepository
+{
+    private readonly ShopDbContext _context;
+    public OrderRepository(ShopDbContext context) =&gt; _context = context;
+
+    public Task&lt;Order?&gt; GetByIdWithItemsAsync(int id) =&gt;
+        _context.Orders
+            .Include(o =&gt; o.Items)
+            .ThenInclude(i =&gt; i.Product)
+            .FirstOrDefaultAsync(o =&gt; o.Id == id);
+}
+</code></pre>
+
+<h2>5. ¿Está bien mezclar repository y DbContext directo en el mismo proyecto?</h2>
+<p><strong>Sí — y es más común de lo que parece.</strong> No es una regla de todo-o-nada.</p>
+<table>
+<tr><th>Repository</th><th>DbContext/DbSet directo</th></tr>
+<tr><td>Entidades con queries de negocio complejas y reusadas (<code>Customer</code>, <code>Order</code>)</td><td>Lecturas simples de una sola tabla, sin lógica (<code>Category</code> para un dropdown)</td></tr>
+<tr><td>Donde importa poder mockear en tests unitarios</td><td>Donde el endpoint es prácticamente un CRUD de un objeto</td></tr>
+</table>
+<p>Lo que sí importa en la entrevista no es "¿usaste repository en el 100% del proyecto?" — es que puedas explicar <em>por qué</em> una entidad lo tiene y otra no. Consistencia dogmática ("todo debe pasar por un repository") suele ser peor señal que una decisión justificada caso por caso.</p>
+
+<p class="source">Fuentes: <a href="https://learn.microsoft.com/en-us/ef/core/" target="_blank">Overview of Entity Framework Core</a> y <a href="https://learn.microsoft.com/en-us/aspnet/mvc/overview/older-versions/getting-started-with-ef-5-using-mvc-4/implementing-the-repository-and-unit-of-work-patterns-in-an-asp-net-mvc-application" target="_blank">Implementing the Repository and Unit of Work Patterns</a> — Microsoft Learn.</p>
+
+<h2>Ejercicio práctico</h2>
+<p>Sin mirar arriba: imaginate un schema nuevo con <code>Invoice</code>, <code>InvoiceLine</code>, <code>Supplier</code>, <code>PaymentMethod</code>. ¿Cuáles tres tendrían repository propio, y cuál no? Justificá <code>InvoiceLine</code> en una frase.</p>
+<div class="quiz-recall">
+  <p class="quiz-q">Compará tu respuesta antes de seguir.</p>
+  <button class="quiz-reveal-btn">Mostrar respuesta</button>
+  <p class="quiz-answer" hidden><code>Invoice</code>, <code>Supplier</code> y <code>PaymentMethod</code> se piden solos ("dame esta factura", "dame este proveedor", "dame los métodos de pago disponibles") → repository propio. <code>InvoiceLine</code> no tiene sentido fuera de una <code>Invoice</code> — se consigue vía <code>invoiceRepository.GetByIdAsync(id)</code> con <code>.Include(i =&gt; i.Lines)</code>, igual que <code>OrderItem</code> con <code>Order</code>.</p>
+</div>
+
+<h2>Retrieval practice</h2>
+<div class="quiz-mc" data-correct="1">
+  <p class="quiz-q">¿Qué carpeta debería tener un <code>using Microsoft.EntityFrameworkCore</code> y hacer llamadas a <code>DbContext</code>?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Models</button>
+    <button class="quiz-opt">Repositories</button>
+    <button class="quiz-opt">Ninguna, EF Core se llama desde el Controller</button>
+    <button class="quiz-opt">Ambas por igual</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="2">
+  <p class="quiz-q">¿Cuál es la pregunta correcta para decidir si una entidad necesita su propio repository?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">¿Tiene más de 3 propiedades?</button>
+    <button class="quiz-opt">¿Está en la carpeta Models?</button>
+    <button class="quiz-opt">¿Tiene sentido pedirla/guardarla por sí sola, sin pasar por otra entidad?</button>
+    <button class="quiz-opt">¿Tiene una clave primaria?</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">En tu schema, ¿por qué <code>OrderItem</code> no debería tener su propio repository?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Porque nunca tiene sentido consultarlo fuera del contexto de una Order</button>
+    <button class="quiz-opt">Porque tiene una FK a Product</button>
+    <button class="quiz-opt">Porque tiene un campo decimal</button>
+    <button class="quiz-opt">Porque EF Core no lo permite</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<h2>Checkpoint del proyecto</h2>
+<p>Ejemplo de punta a punta — <code>ICustomerRepository</code>, con un método simple y uno con la lógica que ya viste en la lección 8 (top spenders):</p>
+<pre><code>public interface ICustomerRepository
+{
+    Task&lt;Customer?&gt; GetByIdAsync(int id);
+    Task&lt;List&lt;Customer&gt;&gt; GetTopSpendersAsync(int minOrders);
+}
+
+public class CustomerRepository : ICustomerRepository
+{
+    private readonly TuDbContext _context;
+    public CustomerRepository(TuDbContext context) =&gt; _context = context;
+
+    public Task&lt;Customer?&gt; GetByIdAsync(int id) =&gt;
+        _context.Customers.FirstOrDefaultAsync(c =&gt; c.Id == id);
+
+    public Task&lt;List&lt;Customer&gt;&gt; GetTopSpendersAsync(int minOrders) =&gt;
+        _context.Customers
+            .Where(c =&gt; c.Orders.Count(o =&gt; o.Status == "Shipped") &gt;= minOrders)
+            .ToListAsync();
+}
+</code></pre>
+<p>Registralo en <code>Program.cs</code>: <code>builder.Services.AddScoped&lt;ICustomerRepository, CustomerRepository&gt;();</code></p>
+<p>Ahora armá vos <code>IEmployeeRepository</code> y <code>IProductRepository</code> (y <code>ICategoryRepository</code> si decidiste que lo necesita), y decidí qué método necesita cada endpoint de la <a href="0000-project-roadmap.html">sección 3 de la definición del proyecto</a>.</p>
+
+<div class="ask-agent">
+Si al aplicar la regla del "¿lo pido solo o no?" a tu propio schema te queda alguna entidad en duda (por ejemplo Category), preguntame y lo pensamos juntos con el caso real.
+</div>
+
+<div class="nav">
+  <a href="0008-tsql-joins-practice.html">← Lección 8: práctica de JOINs</a>
+  <a href="0000-project-roadmap.html">Volver al índice del proyecto →</a>
+</div>
+<script src="../assets/quiz.js"></script>

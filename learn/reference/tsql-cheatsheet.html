@@ -1,0 +1,63 @@
+<title>Referencia · T-SQL</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Referencia rápida</p>
+<h1>T-SQL — cheat sheet</h1>
+<p class="kicker">De la <a href="../lessons/0005-tsql-fundamentals.html">lección 5</a> y la <a href="../lessons/0008-tsql-joins-practice.html">lección 8 (práctica de JOINs)</a>. Pensado para repasar en 5 minutos antes de la prueba.</p>
+
+<h2>Orden lógico de ejecución</h2>
+<pre><code>FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY</code></pre>
+<p>WHERE filtra antes de agrupar; HAVING filtra después. WHERE no puede usar un alias definido en SELECT.</p>
+
+<h2>SELECT + JOIN</h2>
+<pre><code>SELECT o.Id, o.Total, c.Name AS CustomerName
+FROM Orders o
+INNER JOIN Customers c ON o.CustomerId = c.Id
+WHERE o.Total &gt; 100
+ORDER BY o.Total DESC;</code></pre>
+
+<table>
+<tr><th>JOIN</th><th>Devuelve</th></tr>
+<tr><td><code>INNER JOIN</code></td><td>Solo filas con match en ambas tablas</td></tr>
+<tr><td><code>LEFT JOIN</code></td><td>Todas las filas de la izquierda + NULL si no hay match a la derecha</td></tr>
+</table>
+<p><strong>Regla:</strong> "todos los X, tengan o no Y" → <code>LEFT JOIN</code> desde X.</p>
+
+<h2>Agregaciones</h2>
+<pre><code>SELECT CustomerId, COUNT(*) AS OrderCount, SUM(Total) AS TotalSpent
+FROM Orders
+GROUP BY CustomerId
+HAVING SUM(Total) &gt; 1000;</code></pre>
+<table>
+<tr><td><code>COUNT(*)</code></td><td>cantidad de filas por grupo</td></tr>
+<tr><td><code>SUM / AVG / MIN / MAX</code></td><td>agregados numéricos</td></tr>
+<tr><td><code>GROUP BY</code></td><td>agrupa filas por columna(s)</td></tr>
+<tr><td><code>HAVING</code></td><td>filtra grupos ya agregados</td></tr>
+</table>
+
+<h2>Stored procedure</h2>
+<pre><code>CREATE PROCEDURE GetOrdersByCustomer
+    @CustomerId INT,
+    @MinTotal DECIMAL(10,2) = 0     -- parámetro opcional
+AS
+BEGIN
+    SELECT Id, Total, OrderDate
+    FROM Orders
+    WHERE CustomerId = @CustomerId
+      AND Total &gt;= @MinTotal
+    ORDER BY OrderDate DESC;
+END;
+
+-- Ejecutar:
+EXEC GetOrdersByCustomer @CustomerId = 42, @MinTotal = 100;</code></pre>
+
+<h2>CRUD básico</h2>
+<pre><code>INSERT INTO Products (Name, Price) VALUES ('Mouse', 25.99);
+
+UPDATE Products SET Price = 19.99 WHERE Id = 5;
+
+DELETE FROM Products WHERE Id = 5;</code></pre>
+
+<div class="nav">
+  <a href="../lessons/0005-tsql-fundamentals.html">← Volver a las lecciones</a>
+</div>
