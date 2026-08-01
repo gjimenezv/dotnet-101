@@ -67,6 +67,10 @@ Una vez que tu migración crea las tablas, necesitás datos para probar tus endp
 <tr><td>Error "may cause cycles or multiple cascade paths" al migrar <code>Employee</code></td><td><code>Employee</code> tiene una FK a sí misma (<code>ManagerId</code>) — el borrado en cascada por default es ambiguo ahí</td><td>En <code>OnModelCreating</code>: configurá esa relación con <code>.OnDelete(DeleteBehavior.Restrict)</code></td></tr>
 </table>
 
+<div class="callout bridge">
+Por default, EF Core configura las relaciones requeridas como <code>Cascade</code>: borrás el padre, la base borra los hijos automáticamente. Para <code>Employee.ManagerId</code>, "el padre" y "el hijo" son la misma tabla — al generar el DDL, SQL Server directamente rechaza crear esa FK con cascada automática, porque un borrado en cascada que apunta a sí misma puede formar un ciclo ambiguo (por eso el error sale al migrar, no al borrar). <code>DeleteBehavior.Restrict</code> le dice a EF Core que <strong>no</strong> pida cascada — la FK se crea igual, pero sin <code>ON DELETE CASCADE</code>. La consecuencia real: si intentás borrar un <code>Employee</code> que todavía tiene gente reportándole (otras filas con <code>ManagerId</code> apuntando a su <code>Id</code>), la base <strong>rechaza el DELETE</strong> con un error de constraint — tenés que reasignar o borrar primero a sus reports. Es el comportamiento correcto para un organigrama: no querés que borrar un manager borre en cadena a todo su equipo.
+</div>
+
 <h2>4. Cambiar el modelo después: una migración nueva</h2>
 <p>Este es el flujo que más vas a usar en el día a día — y el más probable de aparecer en la prueba práctica: agregás/cambiás una propiedad, generás <strong>otra</strong> migración (nunca edites una ya aplicada):</p>
 <pre><code>// agregaste esto a Product.cs
@@ -117,3 +121,4 @@ Si te sale un error al migrar <code>Employee</code> distinto al de "multiple cas
   <a href="0000-project-roadmap.html">Índice</a>
   <a href="0008-tsql-joins-practice.html">Siguiente: práctica de JOINs →</a>
 </div>
+<script src="../assets/quiz.js"></script>

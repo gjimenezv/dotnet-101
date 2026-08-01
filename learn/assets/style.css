@@ -239,6 +239,11 @@ th { color: var(--fg-muted); font-weight: 600; font-size: 0.85rem; text-transfor
   border-top: 1px dashed var(--rule);
 }
 
+/* Refuerzo explícito: no depender solo del estilo por defecto del navegador para [hidden]. */
+.quiz-answer[hidden] {
+  display: none;
+}
+
 .sql-engine-status {
   font-size: 0.85rem;
   color: var(--fg-muted);
