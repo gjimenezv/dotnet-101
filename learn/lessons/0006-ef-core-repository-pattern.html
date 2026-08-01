@@ -43,6 +43,18 @@ public class Product
 <code>OnModelCreating</code> es donde vive la <strong>Fluent API</strong> — la forma de configurar EF Core con código en vez de atributos sobre las propiedades. Se ejecuta <strong>una sola vez</strong>, la primera vez que tu app usa el <code>DbContext</code> (no en cada request, no en cada query) — EF Core arma el modelo completo, lo cachea en memoria, y lo reusa. Pensalo como un schema de Prisma o de Mongoose: no describe una query puntual, describe las reglas permanentes de cómo tus clases se convierten en tablas. Ahí configurás lo que una propiedad simple no puede expresar: precisión de un <code>decimal</code>, qué pasa al borrar en una relación (<code>OnDelete</code>), claves compuestas, índices, conversiones de tipo, datos semilla (<code>HasData</code>). Todo lo que hicimos con <code>modelBuilder</code> en esta lección y en la <a href="0007-migrations.html">lección 7</a> vive acá adentro, en un solo método.
 </div>
 
+<p>Otras reglas comunes que también van en <code>OnModelCreating</code> — mismo flujo siempre: cambiás esto, generás una migración nueva, la aplicás.</p>
+<table>
+<tr><th>Necesitás...</th><th>Cómo</th></tr>
+<tr><td>Índice</td><td><code>modelBuilder.Entity&lt;Product&gt;().HasIndex(p =&gt; p.Name);</code> — EF Core ya indexa automático cualquier columna FK, esto es para las que no lo son</td></tr>
+<tr><td>FK que la convención no adivina</td><td>Mismo patrón que <code>Employee.Manager</code>: <code>.HasOne(o =&gt; o.ProcessedBy).WithMany().HasForeignKey(o =&gt; o.ProcessedByEmployeeId);</code></td></tr>
+<tr><td>Clave primaria compuesta</td><td><code>modelBuilder.Entity&lt;OrderItem&gt;().HasKey(oi =&gt; new { oi.OrderId, oi.ProductId });</code> — EF Core solo detecta un <code>Id</code> simple por convención, una compuesta siempre se declara a mano</td></tr>
+</table>
+
+<div class="callout tip">
+No todo cambio toca las dos cosas. Un campo simple (<code>string</code>, <code>int</code>, <code>bool</code>) nuevo en el modelo, EF Core lo infiere solo — no necesita nada en <code>OnModelCreating</code>. Un índice sobre un campo que ya existe, al revés: solo <code>OnModelCreating</code>, no tocás la clase. Lo que <strong>sí</strong> es siempre igual, sin excepción, es lo de después: <code>dotnet ef migrations add NombreDescriptivo</code> y <code>dotnet ef database update</code> — ningún cambio de schema llega a la base sin pasar por esos dos comandos.
+</div>
+
 <h2>2. LINQ to Entities: tu .filter()/.map() ahora hablan SQL</h2>
 <p>Lo que en la lección 1 vimos como analogía, acá es literal: EF Core traduce estas expresiones LINQ a SQL real, ejecutado en el servidor — no en memoria.</p>
 
