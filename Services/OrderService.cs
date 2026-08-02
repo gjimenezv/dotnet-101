@@ -8,19 +8,23 @@ namespace dotnet_101.Services
     {
         private readonly IProductRepository _productRepository;
         private readonly IOrderRepository _orderRepository;
+        private readonly ICustomerRepository _customerRepository;
 
-        public OrderService(IProductRepository productRepository, IOrderRepository orderRepository)
+        public OrderService(IProductRepository productRepository, IOrderRepository orderRepository, ICustomerRepository customerRepository)
         {
             _productRepository = productRepository;
             _orderRepository = orderRepository;
+            _customerRepository = customerRepository;
         }
 
         public async Task<Order> PlaceOrderAsync(CreateOrderRequest request)
         {
-            if(request.Items is null || request.Items.Count() == 0) throw new InvalidOperationException($"Items are empty"); 
+            var customer = await _customerRepository.GetByIdAsync(request.CustomerId);
+
+            if (customer is null) throw new InvalidOperationException($"Invalid CustomerId");
 
             var items = new List<OrderItem>();
-            var products = await _productRepository.GetByIdsAsync(request.Items.Select(i => i.ProductId).ToList());
+            var products = await _productRepository.ListByIdsAsync(request.Items.Select(i => i.ProductId).ToList());
 
             foreach (var item in request.Items)
             {
@@ -28,8 +32,6 @@ namespace dotnet_101.Services
                 var product = products.Find(p => p.Id == item.ProductId);
 
                 if (product is null) throw new InvalidOperationException($"Product {item.ProductId} do not exist"); 
-
-                if (item.Quantity <= 0) throw new InvalidOperationException($"Item with product id {item.ProductId} should have Quantity > 0"); 
 
                 items.Add(new OrderItem
                 {

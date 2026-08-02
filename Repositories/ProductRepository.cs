@@ -22,7 +22,7 @@ namespace dotnet_101.Repositories
             return _contex.Products.Include(p => p.Category).FirstOrDefaultAsync(p => p.Id == id);
         }
 
-        public Task<List<Product>> GetByIdsAsync(List<int> ids)
+        public Task<List<Product>> ListByIdsAsync(List<int> ids)
         {
             return _contex.Products.Include(p => p.Category).Where(p => ids.Contains(p.Id)).ToListAsync();
         }

@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace dotnet_101.DTOs
 {
     public record OrderItemDto(
@@ -9,6 +11,7 @@ namespace dotnet_101.DTOs
     );
 
     public record CreateOrderItemRequest(
+        [property: Range(1,int.MaxValue, ErrorMessage = "Quantity debe ser mayor a 0")]
         int Quantity,
         int ProductId
     );

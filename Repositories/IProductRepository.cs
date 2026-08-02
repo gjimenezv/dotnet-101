@@ -8,6 +8,6 @@ namespace dotnet_101.Repositories
 
         Task<Product?> GetByIdAsync(int id);
 
-        Task<List<Product>> GetByIdsAsync(List<int> ids);
+        Task<List<Product>> ListByIdsAsync(List<int> ids);
     }
 }
