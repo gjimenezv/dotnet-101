@@ -10,5 +10,7 @@ namespace dotnet_101.Repositories
         Task<List<CustomerOrderCountDto>> GetCustomerOrderCountAsync(int minOrders);
 
         Task<List<CustomerTotalSpentDto>> GetCustomerTotalSpenAsync();
+
+        Task<List<CustomerOrderCountDto>> ListCustomerOrderCountAsync(int minOrders);
     }
 }

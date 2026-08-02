@@ -58,5 +58,11 @@ namespace dotnet_101.Controllers
 
             return Ok(result);
         }
+
+        [HttpGet("top-by-orders")]
+        public async Task<ActionResult<List<CustomerOrderCountDto>>> TopByOrders(int minOrders)
+        {
+            return await _customerRepository.ListCustomerOrderCountAsync(minOrders);
+        }
     }
 }

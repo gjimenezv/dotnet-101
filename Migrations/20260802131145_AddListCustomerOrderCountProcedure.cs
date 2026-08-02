@@ -12,15 +12,15 @@ namespace dotnet_101.Migrations
         {
             migrationBuilder.Sql(@"
                 CREATE PROCEDURE ListCostumerOrderCount
-                    @MIN_ORDERS INT
+                    @MinOrders INT
                 AS
                 BEGIN
-                SELECT c.Id AS CustomerId, c.Name AS CustomerName, COUNT(o.Id) as OrdersCount
+                SELECT c.Id AS Id, c.Name AS Name, COUNT(o.Id) as OrderCount
                 FROM Customers c
                 INNER JOIN Orders o on o.CustomerId = c.Id
                 GROUP BY c.Id, c.Name
-                HAVING COUNT(o.Id) >= @MIN_ORDERS
-                ORDER BY OrdersCount DESC
+                HAVING COUNT(o.Id) >= @MinOrders
+                ORDER BY OrderCount DESC
                 END
             ");
         }

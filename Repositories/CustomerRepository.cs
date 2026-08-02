@@ -50,5 +50,10 @@ namespace dotnet_101.Repositories
                 .Sum(oi => oi.Quantity * oi.UnitPrice)))
             .ToListAsync();
         }
+
+        public Task<List<CustomerOrderCountDto>> ListCustomerOrderCountAsync(int minOrders)
+        {
+            return _context.Database.SqlQueryRaw<CustomerOrderCountDto>("EXEC ListCostumerOrderCount @MinOrders={0}",minOrders).ToListAsync();
+        }
     }
 }
