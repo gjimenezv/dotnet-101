@@ -1,0 +1,108 @@
+<title>Lección 12 · Async vs multithreading</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Lección 12 de 12</p>
+<h1>Async vs multithreading: lo que puede salir como pregunta conceptual</h1>
+<p class="kicker">Objetivo: explicar con criterio la diferencia entre <code>async</code>/<code>await</code> y multithreading real, y saber cuándo usar cada uno. Esto <strong>no está</strong> en el posting explícitamente — es vocabulario típico de "Sr." que puede salir en la entrevista conceptual, no en la prueba práctica. Prioridad menor a las lecciones anteriores.</p>
+
+<h2>1. El malentendido más común: async no siempre es "otro hilo"</h2>
+<p>Ya usaste <code>async</code>/<code>await</code> en cada endpoint (<code>await _context.Products.ToListAsync()</code>). La pregunta de entrevista es: ¿ese <code>await</code> crea un thread nuevo? <strong>No, no necesariamente.</strong></p>
+
+<div class="callout bridge">
+Microsoft lo distingue así: <em>"I/O-bound code starts an operation represented by a Task... CPU-bound code starts an operation on a background thread with the Task.Run method."</em> — Un query a SQL Server es I/O-bound: tu código le pide el dato a la red y <strong>libera el thread</strong> mientras espera la respuesta, no lo bloquea ni gasta un thread extra. <code>Task.Run</code> es distinto: agarra un thread del thread pool para correr algo que sí necesita CPU real (un cálculo pesado), no red ni disco.
+</div>
+
+<p>Es la misma idea que el <code>await</code> de JS con <code>fetch()</code> — no bloquea el event loop mientras espera la red. La diferencia real: JS es single-threaded siempre (un solo hilo, el event loop). C# tiene un thread pool real detrás — <code>Task.Run</code> sí puede usar un segundo hilo físico cuando el trabajo lo justifica.</p>
+
+<h2>2. Cuándo usar cada uno</h2>
+<table>
+<tr><th>Pregunta</th><th>Escenario</th><th>Qué usar</th></tr>
+<tr><td>¿Esperás una respuesta externa (DB, HTTP, archivo)?</td><td>I/O-bound</td><td><code>async</code>/<code>await</code> directo — <strong>sin</strong> <code>Task.Run</code></td></tr>
+<tr><td>¿Corrés un cálculo pesado en CPU?</td><td>CPU-bound</td><td><code>async</code>/<code>await</code> + <code>Task.Run</code> para no bloquear el thread que llama</td></tr>
+</table>
+<p>Error común en la práctica: envolver un <code>await _context.Products.ToListAsync()</code> (ya I/O-bound, ya asíncrono) dentro de un <code>Task.Run(() =&gt; ...)</code> — no gana nada, solo gasta un thread del pool para no hacer nada mientras espera igual.</p>
+
+<h2>3. Esperar varias tareas en paralelo: <code>Task.WhenAll</code></h2>
+<p>Cuando necesitás varios datos independientes (ej. un dashboard que pide Customers y Products a la vez), lanzarlos secuencialmente con <code>await</code> uno tras otro suma sus tiempos. <code>Task.WhenAll</code> los corre en paralelo y espera a que terminen todos:</p>
+<pre><code>// Secuencial — el tiempo total es la SUMA de ambos
+var customers = await _customerRepository.GetAllAsync();
+var products = await _productRepository.GetAllAsync();
+
+// Paralelo — el tiempo total es el MÁS LENTO de los dos, no la suma
+var customersTask = _customerRepository.GetAllAsync();
+var productsTask = _productRepository.GetAllAsync();
+await Task.WhenAll(customersTask, productsTask);
+
+var customers = await customersTask;
+var products = await productsTask;
+</code></pre>
+<div class="callout warn">
+Esto funciona para dos queries <strong>independientes</strong>. No funciona si ambas comparten el mismo <code>DbContext</code> — ver el punto 4.
+</div>
+
+<h2>4. El gotcha real de tu proyecto: <code>DbContext</code> no es thread-safe</h2>
+<p><code>AddScoped&lt;TuDbContext&gt;()</code> (lección 4) te da <strong>una instancia por request</strong>, nunca compartida entre requests distintos — eso ya te protege del caso general. Pero si alguna vez lanzás dos queries en paralelo <strong>dentro del mismo request</strong> usando el mismo <code>_context</code> (ej. dos <code>Task.WhenAll</code> contra el mismo <code>DbContext</code>), vas a tener una excepción en runtime: EF Core no permite dos operaciones concurrentes sobre la misma instancia. Si necesitás paralelismo real dentro de un mismo endpoint, cada tarea necesita su propio <code>DbContext</code> (o simplemente no paralelizar esa parte — para la mayoría de endpoints CRUD, secuencial alcanza).</p>
+
+<h2>5. Race conditions y <code>lock</code> (solo para reconocerlo)</h2>
+<p>Una <strong>race condition</strong> pasa cuando dos threads leen y escriben la misma variable compartida sin coordinación, y el resultado final depende de qué thread "ganó la carrera". <code>lock</code> es la herramienta básica de C# para evitarlo:</p>
+<pre><code>private readonly object _lock = new();
+private int _counter = 0;
+
+public void Increment()
+{
+    lock (_lock)
+    {
+        _counter++;   // solo un thread a la vez puede estar acá adentro
+    }
+}
+</code></pre>
+<p>En una Web API típica esto casi no aparece (cada request tiene su propio scope, no comparte estado mutable) — pero es la respuesta esperada si te preguntan "¿qué es una race condition y cómo la evitás en C#?".</p>
+
+<h2>Resumen para la entrevista</h2>
+<p>Si te preguntan "¿cuándo usarías <code>Task.Run</code> vs. simplemente <code>await</code>?": <em>"await directo para trabajo I/O-bound como una query o un HTTP call, porque libera el thread mientras espera. Task.Run solo para trabajo CPU-bound, porque ahí sí necesito correr algo en paralelo real. Y si necesito varias tareas independientes a la vez, Task.WhenAll en vez de encadenar awaits secuenciales."</em></p>
+
+<p class="source">Fuente principal: <a href="https://learn.microsoft.com/en-us/dotnet/csharp/asynchronous-programming/async-scenarios" target="_blank">Asynchronous programming scenarios</a> — Microsoft Learn.</p>
+
+<h2>Retrieval practice</h2>
+<div class="quiz-mc" data-correct="1">
+  <p class="quiz-q">Tenés un endpoint que hace <code>await _context.Orders.ToListAsync()</code>. ¿Deberías envolverlo en <code>Task.Run</code>?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Sí, siempre que uses async</button>
+    <button class="quiz-opt">No — ya es I/O-bound y async, Task.Run no aporta nada</button>
+    <button class="quiz-opt">Sí, pero solo en producción</button>
+    <button class="quiz-opt">No, porque ToListAsync no se puede paralelizar nunca</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="2">
+  <p class="quiz-q">Necesitás pedirle datos a dos repositories independientes lo más rápido posible. ¿Qué usás?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Dos awaits seguidos, uno tras otro</button>
+    <button class="quiz-opt">Task.Run para cada uno</button>
+    <button class="quiz-opt">Task.WhenAll con ambas tareas</button>
+    <button class="quiz-opt">lock alrededor de ambas llamadas</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">¿Por qué no podés lanzar dos queries en paralelo usando el mismo DbContext dentro del mismo request?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">DbContext no es thread-safe, no soporta operaciones concurrentes sobre la misma instancia</button>
+    <button class="quiz-opt">SQL Server lo bloquea por licencia</button>
+    <button class="quiz-opt">LINQ no soporta await dentro de Task.WhenAll</button>
+    <button class="quiz-opt">Sí se puede, no hay ningún problema</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="ask-agent">
+Esta lección es puramente conceptual — no hay ejercicio de código nuevo en el proyecto para esto, es vocabulario de entrevista. Si después del lunes seguís en este stack y querés profundizar en paralelismo real (Parallel.For, PLINQ, canales), avisame y armamos algo con más práctica.
+</div>
+
+<div class="nav">
+  <a href="0011-unit-testing.html">← Lección 11: unit testing con xUnit y Moq</a>
+  <a href="0000-project-roadmap.html">Volver al índice del proyecto →</a>
+</div>
+<script src="../assets/quiz.js"></script>

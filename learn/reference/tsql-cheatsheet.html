@@ -58,6 +58,27 @@ UPDATE Products SET Price = 19.99 WHERE Id = 5;
 
 DELETE FROM Products WHERE Id = 5;</code></pre>
 
+<h2>Optimización básica: índices y table scans</h2>
+<pre><code>CREATE INDEX IX_Orders_CustomerId ON Orders(CustomerId);</code></pre>
+<table>
+<tr><th>Concepto</th><th>Qué es</th></tr>
+<tr><td>Clustered index</td><td>Ordena físicamente las filas de la tabla. Solo puede haber uno — SQL Server lo crea automático con tu <code>PRIMARY KEY</code></td></tr>
+<tr><td>Nonclustered index</td><td>Estructura aparte que apunta a las filas. Podés tener varios — creálo en columnas que uses seguido en <code>WHERE</code>/<code>JOIN</code> y que no sean ya la PK</td></tr>
+<tr><td>Table scan</td><td>SQL Server lee <strong>toda</strong> la tabla fila por fila porque no hay índice útil — lento en tablas grandes, la señal más común de "esta query necesita un índice"</td></tr>
+</table>
+<div class="callout tip">EF Core ya indexa automático toda columna FK (ver lección 7) — un índice manual solo hace falta en columnas que filtrás/ordenás seguido y que no son ya una FK, como <code>Orders.OrderDate</code> o <code>Customers.City</code>.</div>
+
+<h2>El problema N+1 (EF Core, no T-SQL puro)</h2>
+<pre><code>// N+1: 1 query para Orders + 1 query POR CADA Order para su Customer
+foreach (var order in await _context.Orders.ToListAsync())
+    Console.WriteLine(order.Customer.Name);   // dispara un SELECT por vuelta
+
+// 1 sola query con JOIN
+var orders = await _context.Orders.Include(o =&gt; o.Customer).ToListAsync();</code></pre>
+<p>Si te preguntan "¿cómo optimizarías esta query lenta?" y ves un loop con acceso a una navigation property adentro, la respuesta casi siempre es <code>.Include()</code> (o <code>.Select()</code> proyectando solo lo que necesitás).</p>
+
+<p class="source">Fuente: <a href="https://learn.microsoft.com/en-us/sql/relational-databases/indexes/clustered-and-nonclustered-indexes-described" target="_blank">Clustered and Nonclustered Indexes</a> — Microsoft Learn.</p>
+
 <div class="nav">
   <a href="../lessons/0005-tsql-fundamentals.html">← Volver a las lecciones</a>
 </div>

@@ -15,8 +15,10 @@ Vos creás el proyecto. Yo no voy a tocar tu carpeta ni escribir tus modelos/mig
 <tr><td>APIs/backend robustas en C# y .NET</td><td>Lecciones 1, 2, 3, 4</td><td>Tu proyecto: Controllers</td></tr>
 <tr><td>SQL Server / T-SQL, queries y stored procedures</td><td>Lecciones 5, 6, 9</td><td>SQL Server real (container Docker) + endpoints con LINQ, <code>FromSqlRaw</code> y stored procedures</td></tr>
 <tr><td>Entity Framework y repository/data access pattern</td><td>Lecciones 4, 7, 8, 10</td><td>Tu <code>DbContext</code>, tus migraciones, tu carpeta <code>Repositories/</code></td></tr>
+<tr><td>Code reviews, testing, debugging, performance tuning</td><td>Lecciones 11 (testing), 6/9 (performance vía cheat sheet de T-SQL)</td><td>Tests de <code>OrderService</code> con xUnit/Moq, sin tocar la base real</td></tr>
 <tr><td>Code review, debugging, calidad</td><td>Implícito en cada checkpoint (reviso lo que escribís antes de avanzar)</td><td>—</td></tr>
 </table>
+<p class="source">Frase textual del posting citada arriba: "Code reviews, testing, debugging, performance tuning". Multithreading/paralelismo <strong>no aparece</strong> en el posting — la <a href="0012-async-multithreading.html">lección 12</a> lo cubre igual como vocabulario general de nivel Sr., prioridad menor a todo lo demás.</p>
 <p class="source">Ver <code>MISSION.md</code> para el detalle completo de objetivos y qué quedó fuera de alcance (React, AWS, Jenkins) por la ventana de tiempo.</p>
 
 <h2>2. El schema — qué entidades vas a modelar</h2>
@@ -135,6 +137,8 @@ Los otros 8 endpoints no ganan nada metiendo un Service de por medio — son un 
 <tr><td><a href="0008-migrations.html">8. Migraciones paso a paso</a></td><td>Ciclo completo: modelo → migración → base de datos real, con <code>Category</code> de ejemplo</td><td>Migrar el resto de tus entidades vos solo</td></tr>
 <tr><td><a href="0009-ef-core-advanced-querying.html">9. SQL crudo, stored procedures y queries anidadas</a></td><td><code>FromSqlRaw</code>/<code>ExecuteSqlRaw</code>, tipos keyless, agregaciones anidadas (sum de sum)</td><td>Resolver los endpoints de la sección 3 que LINQ solo no puede, contra tu base ya migrada</td></tr>
 <tr><td><a href="0010-repository-structure.html">10. Organizando Repositories</a></td><td>Aggregate roots, estructura de carpetas, cuándo mezclar con DbContext directo</td><td>Armar tu carpeta <code>Repositories/</code> con criterio</td></tr>
+<tr><td><a href="0011-unit-testing.html">11. Unit testing con xUnit y Moq</a></td><td>Proyecto de tests, mocks, Arrange-Act-Assert</td><td>Testear tu <code>OrderService</code> sin base de datos real — "testing" del posting, resuelto</td></tr>
+<tr><td><a href="0012-async-multithreading.html">12. Async vs multithreading</a></td><td>Task vs Thread, Task.Run, Task.WhenAll, por qué DbContext no es thread-safe</td><td>Responder con criterio si sale como pregunta conceptual — no está en el posting, prioridad menor</td></tr>
 </table>
 
 <h2>7. Tu progreso (marcalo vos, esto no se actualiza solo)</h2>
@@ -147,6 +151,8 @@ Los otros 8 endpoints no ganan nada metiendo un Service de por medio — son un 
 <li>☐ Repositories para las entidades que correspondan (lección 10)</li>
 <li>☐ <code>OrderService</code> armado, <code>OrdersController</code> lo usa en vez de hablarle directo al repository (sección 5)</li>
 <li>☐ Los 9 endpoints de la sección 3 — LINQ, SQL crudo y stored procedure, en orden de complejidad</li>
+<li>☐ Proyecto de tests creado, al menos 2 tests de <code>OrderService</code> mockeando repositories (lección 11)</li>
+<li>☐ Podés explicar Task vs Thread y por qué DbContext no es thread-safe, sin código (lección 12)</li>
 </ul>
 
 <div class="nav">

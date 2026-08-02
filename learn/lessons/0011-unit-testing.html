@@ -1,0 +1,179 @@
+<title>Lección 11 · Unit testing con xUnit y Moq</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Lección 11 de 12</p>
+<h1>Testear tu Service/Repository sin tocar la base de datos real</h1>
+<p class="kicker">Objetivo: crear un proyecto de tests, mockear una dependencia, y escribir un test real contra tu <code>OrderService</code>. El posting dice explícito "code reviews, testing, debugging, performance tuning" — es lo único de esa frase que hasta ahora no practicaste.</p>
+
+<div class="callout bridge">
+Esto es tu Jest/Vitest. <strong>xUnit</strong> es el test runner (el <code>describe</code>/<code>it</code>). <strong>Moq</strong> es tu <code>jest.mock()</code> — reemplaza una dependencia real por una falsa que vos controlás.
+</div>
+
+<h2>1. Por qué esto NO toca tu base de datos</h2>
+<p>Un <strong>unit test</strong> prueba una unidad de lógica aislada — no una base de datos real, no HTTP real. Tu <code>OrderService</code> (<a href="0000-project-roadmap.html">lección 0000, sección 5</a>) es el candidato perfecto: su lógica de negocio (validar que el producto exista, copiar el precio) no depende de SQL Server, solo de las interfaces <code>IProductRepository</code>/<code>IOrderRepository</code> que ya definiste. Si mockeás esas interfaces, podés probar la lógica sin Docker, sin conexión, en milisegundos.</p>
+
+<p><em>(Un <strong>integration test</strong>, en cambio, sí golpea una base real — está fuera de alcance para hoy; con esto alcanza para hablar de "testing" con propiedad en la entrevista.)</em></p>
+
+<h2>2. Crear el proyecto de test</h2>
+<p>Tu proyecto de tests vive separado del proyecto principal, pero lo referencia:</p>
+<pre><code>dotnet new xunit -o TuProyecto.Tests
+dotnet add ./TuProyecto.Tests reference ./TuProyecto
+dotnet add ./TuProyecto.Tests package Moq</code></pre>
+<p><code>dotnet new xunit</code> ya agrega los paquetes de xUnit por vos (<code>Microsoft.NET.Test.Sdk</code>, <code>xunit</code>, <code>xunit.runner.visualstudio</code>). El segundo comando es lo que te deja hacer <code>using TuProyecto.Services;</code> desde el proyecto de tests.</p>
+
+<h2>3. Anatomía de un test: <code>[Fact]</code> + Arrange-Act-Assert</h2>
+<pre><code>using Xunit;
+
+public class CalculatorTests
+{
+    [Fact]
+    public void Add_TwoPositiveNumbers_ReturnsSum()
+    {
+        // Arrange — preparás los datos/objetos que necesitás
+        var a = 2;
+        var b = 3;
+
+        // Act — ejecutás lo que estás probando
+        var result = a + b;
+
+        // Assert — verificás el resultado
+        Assert.Equal(5, result);
+    }
+}
+</code></pre>
+<p><code>[Fact]</code> marca un método como un test que corre solo. Nombre del método: convención <code>Método_Escenario_ResultadoEsperado</code> — se lee como una frase.</p>
+
+<h2>4. Mockear una dependencia con Moq</h2>
+<p>Moq crea una implementación falsa de una interfaz en tiempo de ejecución — vos le decís qué devolver cuando se llama a cada método:</p>
+<pre><code>var mockProducts = new Mock&lt;IProductRepository&gt;();
+
+// "Cuando alguien llame GetByIdAsync(1), devolvé este Product"
+mockProducts
+    .Setup(p =&gt; p.GetByIdAsync(1))
+    .ReturnsAsync(new Product { Id = 1, Name = "Mouse", Price = 25.99m });
+
+// Pasás mock.Object (no el mock en sí) a la clase que estás probando
+var service = new OrderService(mockOrders.Object, mockProducts.Object);
+</code></pre>
+<div class="callout warn">
+Error común: pasar <code>mockProducts</code> directo en vez de <code>mockProducts.Object</code>. El <code>Mock&lt;T&gt;</code> es el controlador del falso; <code>.Object</code> es el objeto falso que efectivamente implementa <code>IProductRepository</code>.
+</div>
+
+<h2>5. Ejemplo real: testeando <code>OrderService.PlaceOrderAsync</code></h2>
+<p>Dos casos que valen la pena probar de la lógica que ya escribiste en la <a href="0000-project-roadmap.html">sección 5 del roadmap</a>:</p>
+<pre><code>public class OrderServiceTests
+{
+    [Fact]
+    public async Task PlaceOrderAsync_ProductDoesNotExist_ThrowsException()
+    {
+        // Arrange
+        var mockProducts = new Mock&lt;IProductRepository&gt;();
+        mockProducts.Setup(p =&gt; p.GetByIdAsync(It.IsAny&lt;int&gt;()))
+                    .ReturnsAsync((Product?)null);   // no existe
+
+        var mockOrders = new Mock&lt;IOrderRepository&gt;();
+        var service = new OrderService(mockOrders.Object, mockProducts.Object);
+
+        var request = new CreateOrderRequest
+        {
+            CustomerId = 1,
+            Items = new List&lt;OrderLineRequest&gt; { new() { ProductId = 999, Quantity = 1 } }
+        };
+
+        // Act + Assert — InvokeAsync porque esperamos una excepción async
+        await Assert.ThrowsAsync&lt;InvalidOperationException&gt;(
+            () =&gt; service.PlaceOrderAsync(request));
+    }
+
+    [Fact]
+    public async Task PlaceOrderAsync_ValidProduct_SnapshotsCurrentPrice()
+    {
+        // Arrange
+        var product = new Product { Id = 1, Name = "Mouse", Price = 25.99m };
+        var mockProducts = new Mock&lt;IProductRepository&gt;();
+        mockProducts.Setup(p =&gt; p.GetByIdAsync(1)).ReturnsAsync(product);
+
+        Order? createdOrder = null;
+        var mockOrders = new Mock&lt;IOrderRepository&gt;();
+        mockOrders.Setup(o =&gt; o.CreateAsync(It.IsAny&lt;Order&gt;()))
+                  .Callback&lt;Order&gt;(o =&gt; createdOrder = o)   // captura lo que le pasaron
+                  .ReturnsAsync((Order o) =&gt; o);
+
+        var service = new OrderService(mockOrders.Object, mockProducts.Object);
+        var request = new CreateOrderRequest
+        {
+            CustomerId = 1,
+            Items = new List&lt;OrderLineRequest&gt; { new() { ProductId = 1, Quantity = 2 } }
+        };
+
+        // Act
+        await service.PlaceOrderAsync(request);
+
+        // Assert
+        Assert.NotNull(createdOrder);
+        Assert.Equal(25.99m, createdOrder!.OrderItems.First().UnitPrice);
+        mockOrders.Verify(o =&gt; o.CreateAsync(It.IsAny&lt;Order&gt;()), Times.Once);
+    }
+}
+</code></pre>
+<p>El segundo test es el que vale más en una entrevista: no solo corre sin errores, verifica la <strong>regla de negocio real</strong> (el precio se copia al momento de crear la orden) sin depender de que exista una base de datos con ese producto cargado.</p>
+
+<h2>6. Bonus: <code>[Theory]</code> para no repetir el mismo test con distintos inputs</h2>
+<pre><code>[Theory]
+[InlineData(0)]
+[InlineData(-1)]
+public async Task PlaceOrderAsync_InvalidQuantity_ThrowsException(int quantity)
+{
+    // mismo test, corre una vez por cada InlineData
+}
+</code></pre>
+
+<p class="source">Fuente principal: <a href="https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-csharp-with-xunit" target="_blank">Unit testing C# with dotnet test and xUnit</a> — Microsoft Learn. Sintaxis de Moq: <a href="https://github.com/devlooped/moq/wiki/Quickstart" target="_blank">Moq Quickstart</a> — repositorio oficial.</p>
+
+<h2>Checkpoint del proyecto</h2>
+<p>Agregá un tercer test vos: verificá que si mandás dos <code>OrderLineRequest</code> distintos, <code>createdOrder.OrderItems</code> tiene exactamente 2 elementos. Es el mismo patrón de <code>Callback</code> + <code>Assert</code> de arriba, cambiando qué revisás.</p>
+
+<h2>Retrieval practice</h2>
+<div class="quiz-mc" data-correct="2">
+  <p class="quiz-q">¿Qué diferencia a un unit test de un integration test?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">El unit test corre más lento</button>
+    <button class="quiz-opt">El integration test no usa Assert</button>
+    <button class="quiz-opt">El unit test aísla la lógica con mocks; el integration test golpea dependencias reales</button>
+    <button class="quiz-opt">No hay diferencia real, son sinónimos</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="1">
+  <p class="quiz-q">Tenés <code>var mock = new Mock&lt;IProductRepository&gt;();</code>. ¿Qué le pasás al constructor de la clase que estás probando?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">mock</button>
+    <button class="quiz-opt">mock.Object</button>
+    <button class="quiz-opt">mock.Setup()</button>
+    <button class="quiz-opt">new IProductRepository()</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">¿Qué hace <code>mockOrders.Verify(o =&gt; o.CreateAsync(It.IsAny&lt;Order&gt;()), Times.Once);</code>?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Confirma que CreateAsync se llamó exactamente una vez</button>
+    <button class="quiz-opt">Crea una orden real en la base de datos</button>
+    <button class="quiz-opt">Configura qué devuelve CreateAsync</button>
+    <button class="quiz-opt">Falla el test siempre, sirve solo para debug</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="ask-agent">
+Si <code>dotnet add reference</code> te tira un error de que no encuentra el proyecto, o si <code>Assert.ThrowsAsync</code> no compila (versión vieja de xUnit), pegame el error exacto antes de asumir que tu código está mal.
+</div>
+
+<div class="nav">
+  <a href="0010-repository-structure.html">← Lección 10: organizando Models y Repositories</a>
+  <a href="0000-project-roadmap.html">Índice</a>
+  <a href="0012-async-multithreading.html">Siguiente: async vs multithreading →</a>
+</div>
+<script src="../assets/quiz.js"></script>

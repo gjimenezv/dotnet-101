@@ -7,7 +7,8 @@ Tengo prueba práctica el domingo 2026-08-02 y entrevista técnica el lunes 2026
 - Escribir un endpoint de Web API en C#/.NET (controller o minimal API, ruta, DTO, inyección de dependencias) sin copiar un tutorial completo.
 - Leer y escribir T-SQL con JOINs, agregaciones, y crear un stored procedure simple con parámetros.
 - Usar Entity Framework Core (DbContext, migrations, LINQ básico) y explicar qué es y para qué sirve el repository/data access pattern.
-- Responder preguntas conceptuales de entrevista sobre estos 3 temas con vocabulario correcto y ejemplos concretos, aunque no haya fluidez total escribiendo código complejo de memoria.
+- Escribir un unit test simple (xUnit) mockeando una dependencia (Moq), sin conectarse a la base real — "testing" está textual en el posting.
+- Responder preguntas conceptuales de entrevista sobre estos temas con vocabulario correcto y ejemplos concretos, aunque no haya fluidez total escribiendo código complejo de memoria.
 
 ## Constraints
 - **Ventana real de estudio: viernes 31-jul (tarde) + sábado 1-ago.** Domingo 2-ago es la prueba práctica (ya no hay tiempo de estudio nuevo, solo repaso). Lunes 3-ago mediodía es la entrevista.
@@ -18,4 +19,6 @@ Tengo prueba práctica el domingo 2026-08-02 y entrevista técnica el lunes 2026
 ## Out of scope (por ahora)
 - React/JS/TypeScript — ya domina, no repasar salvo que sirva de puente conceptual.
 - AWS (EC2/RDS), Snowflake, Hangfire, Jenkins/CI-CD — mencionados en el posting pero no priorizados por el usuario en esta ventana de 3 días.
-- Optimización avanzada de queries, arquitecturas EF complejas (CQRS, unit of work avanzado), microservicios — cubrir lo esencial primero; profundizar después de la entrevista si el puesto lo requiere.
+- Optimización avanzada de queries, arquitecturas EF complejas (CQRS, unit of work avanzado), microservicios — cubrir lo esencial primero; profundizar después de la entrevista si el puesto lo requiere. Sí se cubrió lo básico de índices/table scans/N+1 (cheat sheet de T-SQL) porque "optimizing queries" está textual en el posting.
+- Multithreading/paralelismo real (Parallel.For, PLINQ) — no está en el posting; lección 12 cubre solo el nivel conceptual (Task vs Thread) por si sale como pregunta de entrevista genérica de "Sr.".
+- Integration testing (contra una base de datos real) — solo unit testing con mocks (lección 11), por tiempo.
