@@ -6,4 +6,14 @@ namespace dotnet_101.DTOs
         decimal Price,
         string Category
     );
+
+    public record TopProductsSoldByCategoryDto (
+        int ProductId,
+        string ProductName,
+        int CategoryId,
+        string CategoryName,
+        int TotalUnitsSold,
+        decimal TotalRevenue,
+        long Rank
+    );
 }

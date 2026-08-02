@@ -35,6 +35,12 @@ namespace dotnet_101.Controllers
             
             return Ok(dto);
         }
+
+        [HttpGet("top-by-category")]
+        public async Task<ActionResult<List<TopProductsSoldByCategoryDto>>> TopByCategory(int? categoryId, int topN = 1)
+        {
+            return Ok(await _productRepository.TopProductsSoldByCategoryAsync(topN,categoryId));
+        }
     
     }
 }
