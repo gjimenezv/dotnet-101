@@ -6,5 +6,6 @@ namespace dotnet_101.Services
     public interface IOrderService
     {
         Task<Order> PlaceOrderAsync (CreateOrderRequest request);
+        Task<Order> CancelOrderAsync (int id);
     }
 }

@@ -21,7 +21,7 @@ namespace dotnet_101.Services
         {
             var customer = await _customerRepository.GetByIdAsync(request.CustomerId);
 
-            if (customer is null) throw new InvalidOperationException($"Invalid CustomerId");
+            if (customer is null) throw new KeyNotFoundException($"Invalid CustomerId");
 
             var items = new List<OrderItem>();
             var products = await _productRepository.ListByIdsAsync(request.Items.Select(i => i.ProductId).ToList());
@@ -31,7 +31,7 @@ namespace dotnet_101.Services
 
                 var product = products.Find(p => p.Id == item.ProductId);
 
-                if (product is null) throw new InvalidOperationException($"Product {item.ProductId} do not exist"); 
+                if (product is null) throw new KeyNotFoundException($"Product {item.ProductId} do not exist"); 
 
                 items.Add(new OrderItem
                 {
@@ -50,6 +50,19 @@ namespace dotnet_101.Services
             };
 
             return await _orderRepository.CreateAsync(order);
+        }
+
+        public async Task<Order> CancelOrderAsync(int id)
+        {
+            var order = await _orderRepository.GetByIdAsync(id);
+
+            if (order is null ) throw new KeyNotFoundException($"Invalid Order Id {id}");
+
+            if (order.Status is "Shipped" or "Cancelled") throw new InvalidOperationException($"Order {id} is already {order.Status}, cannot cancel");
+            
+            order.Status = "Cancelled";
+
+            return await _orderRepository.UpdateAsync(order);
         }
     }
 }

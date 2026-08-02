@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using dotnet_101.DTOs;
 using dotnet_101.Services;
+using dotnet_101.Models;
+using dotnet_101.Extensions;
 
 namespace dotnet_101.Controllers
 {
@@ -19,27 +21,33 @@ namespace dotnet_101.Controllers
             try
             {
                 var order = await _orderService.PlaceOrderAsync(request);
-                return StatusCode(201,
-                    new OrderDto(
-                        order.Id,
-                        order.Status,
-                        order.OrderDate,
-                        order.OrderItems.Select(
-                            oi => new OrderItemDto(
-                                oi.Id,
-                                oi.Quantity,
-                                oi.UnitPrice,
-                                oi.ProductId,
-                                oi.OrderId
-                            )
-                        ).ToList()));
+                return StatusCode(201,order.ToDto());
             }
-            catch (InvalidOperationException ex)
+            catch (KeyNotFoundException ex)
             {
                 
                 return Problem(detail: ex.Message, statusCode: 400);
             }
             
+        }
+
+        [HttpPatch("{id}/cancel")]
+        public async Task<ActionResult<OrderDto>> CancelOrderAsync(int id)
+        {
+            try
+            {
+                var order = await _orderService.CancelOrderAsync(id);
+                return Ok(order.ToDto());
+            }
+            catch (KeyNotFoundException ex)
+            {
+                
+                return Problem(detail: ex.Message, statusCode: 404);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Problem(detail: ex.Message, statusCode: 409);
+            }
         }
     }
 }
