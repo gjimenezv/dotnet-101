@@ -1,0 +1,113 @@
+<title>Lección 13 · Autenticación: leer tokens y proteger endpoints</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Lección 13 de 13</p>
+<h1>No hay "session" en una Web API — hay tokens</h1>
+<p class="kicker">Objetivo: entender por qué una Web API no guarda sesión en el servidor, cómo leer un token en cada request, proteger un endpoint con <code>[Authorize]</code>, y probarlo local sin armar un sistema de login. <strong>No está en el posting explícito</strong> — lo agrego porque preguntaste vos, pero calculá tiempo: las lecciones 1-11 cubren todo lo que sí está confirmado en el posting.</p>
+
+<h2>1. Por qué no hay "session" tradicional acá</h2>
+<p>Si venís de Express, quizás usaste <code>express-session</code> o <code>cookie-session</code>: el servidor guarda un estado ("este usuario está logueado") y se lo recuerda al cliente con una cookie. Una Web API REST típica <strong>no hace eso</strong> — es <em>stateless</em>: el servidor no recuerda nada entre requests. Cada request tiene que probar quién es, de nuevo, cada vez.</p>
+
+<div class="callout bridge">
+En vez de una cookie de sesión que el servidor busca en su propia memoria/base, el cliente manda un <strong>token</strong> (un JWT, casi siempre) en el header <code>Authorization: Bearer &lt;token&gt;</code> de cada request. El token es autocontenido — el servidor no necesita ir a buscar nada a ningún lado para saber quién sos, solo verifica la firma del token. Es la razón por la que las Web APIs escalan mejor: no hay estado de sesión que sincronizar entre instancias del servidor.
+</div>
+
+<h2>2. Configurar autenticación por JWT</h2>
+<pre><code>dotnet add package Microsoft.AspNetCore.Authentication.JwtBearer</code></pre>
+<p>En <code>Program.cs</code>:</p>
+<pre><code>builder.Services.AddAuthentication("Bearer").AddJwtBearer();
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+
+app.UseAuthentication();   // ← quién sos
+app.UseAuthorization();    // ← qué podés hacer
+</code></pre>
+<div class="callout warn">
+El orden importa: <code>UseAuthentication</code> siempre va <strong>antes</strong> que <code>UseAuthorization</code> — no podés decidir si alguien tiene permiso (authorization) antes de saber quién es (authentication). Revisá tu <code>Program.cs</code> real: si generaste el proyecto con la plantilla de ASP.NET Core, probablemente ya tenga <code>app.UseAuthorization()</code> puesto por default — pero sin <code>AddAuthentication()</code>/<code>AddJwtBearer()</code> registrado arriba y sin <code>UseAuthentication()</code> en el pipeline, ese <code>[Authorize]</code> no tiene ninguna identidad real para evaluar.
+</div>
+
+<h2>3. Proteger un endpoint: <code>[Authorize]</code></h2>
+<pre><code>[ApiController]
+[Route("/api/[controller]")]
+public class OrdersController : ControllerBase
+{
+    [Authorize]
+    [HttpGet("mine")]
+    public IActionResult GetMyOrders()
+    {
+        var name = User.Identity?.Name;
+        return Ok($"Órdenes de {name}");
+    }
+}
+</code></pre>
+<p>Sin <code>[Authorize]</code>, cualquiera pega al endpoint sin credenciales. Con <code>[Authorize]</code>, ASP.NET Core devuelve <strong>401 Unauthorized</strong> automático si no viene un token válido en el header — no escribís ese chequeo a mano, es el mismo mecanismo que ya viste con la validación automática de <code>[ApiController]</code>.</p>
+<p>También se puede proteger el <code>ControllerBase</code> completo poniendo <code>[Authorize]</code> arriba de la clase, y usar <code>[AllowAnonymous]</code> en la acción puntual que sí debe quedar pública (por ejemplo, un endpoint de login).</p>
+
+<h2>4. Leer datos del usuario actual adentro del endpoint</h2>
+<p><code>ControllerBase.User</code> es un <code>ClaimsPrincipal</code> — la identidad ya decodificada del token, disponible en cualquier action sin que la pidas por parámetro:</p>
+<pre><code>var name = User.Identity?.Name;
+var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+var isAdmin = User.IsInRole("Admin");
+</code></pre>
+<p>Un <strong>claim</strong> es un par clave-valor que viaja adentro del token (ej. <code>sub</code>/id de usuario, <code>role</code>, <code>email</code>) — quien firmó el token decidió qué claims incluir. <code>User.FindFirst(...)</code> busca uno específico.</p>
+
+<h2>5. Probarlo local sin armar login</h2>
+<p>No necesitás un sistema de login real para probar esto hoy. El SDK de .NET trae una herramienta para generar tokens válidos de desarrollo:</p>
+<pre><code>dotnet user-jwts create</code></pre>
+<p>Esto genera un JWT firmado y actualiza <code>appsettings.Development.json</code> con la configuración necesaria para que tu propio proyecto lo acepte. Copiá el token que te imprime, y en Postman: header <code>Authorization</code>, valor <code>Bearer &lt;token que copiaste&gt;</code>.</p>
+<div class="callout tip">
+<code>dotnet user-jwts</code> usa la misma infraestructura que <code>dotnet user-secrets</code> (que ya usaste para la connection string) — guarda todo en tu perfil de usuario local, nunca en un archivo que se comitea.
+</div>
+
+<h2>6. ¿Y las cookies?</h2>
+<p>ASP.NET Core también soporta autenticación por cookie (más parecido a lo que quizás conocés de sesiones tradicionales) — tiene sentido para apps server-rendered donde el mismo servidor sirve el HTML. Para una Web API consumida por un cliente separado (tu React, Postman, una app mobile), Bearer token es la norma: no depende de que el cliente y el servidor compartan el mismo dominio, y evita la complejidad extra de protección CSRF que las cookies necesitan.</p>
+
+<p class="source">Fuente principal: <a href="https://learn.microsoft.com/en-us/aspnet/core/security/authentication/jwt-authn" target="_blank">Generate tokens with dotnet user-jwts</a> — Microsoft Learn.</p>
+
+<h2>Retrieval practice</h2>
+<div class="quiz-mc" data-correct="1">
+  <p class="quiz-q">¿Por qué una Web API REST típica no usa "session" del lado del servidor como express-session?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Porque C# no soporta sesiones</button>
+    <button class="quiz-opt">Porque es stateless — cada request se autentica solo, sin que el servidor recuerde nada entre requests</button>
+    <button class="quiz-opt">Porque las cookies no existen en .NET</button>
+    <button class="quiz-opt">Porque JWT es obligatorio por ley en APIs REST</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">En el pipeline de Program.cs, ¿qué va primero?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">app.UseAuthentication() antes que app.UseAuthorization()</button>
+    <button class="quiz-opt">app.UseAuthorization() antes que app.UseAuthentication()</button>
+    <button class="quiz-opt">No importa el orden</button>
+    <button class="quiz-opt">Ninguno de los dos hace falta si usás [Authorize]</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="2">
+  <p class="quiz-q">Pegás GET a un endpoint con [Authorize] sin mandar ningún token. ¿Qué devuelve?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">200 OK con datos vacíos</button>
+    <button class="quiz-opt">500 Internal Server Error</button>
+    <button class="quiz-opt">401 Unauthorized, automático</button>
+    <button class="quiz-opt">Nunca falla, [Authorize] es solo documentación</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<h2>Checkpoint del proyecto</h2>
+<p>Agregá <code>[Authorize]</code> a un endpoint de lectura (por ejemplo <code>GET /api/products</code>), corré <code>dotnet user-jwts create</code>, y probá dos requests en Postman: sin header <code>Authorization</code> (esperá 401) y con <code>Bearer &lt;token&gt;</code> (esperá 200). No hace falta que conectes esto a tus entidades de <code>Customer</code>/<code>Employee</code> — es solo para ver el mecanismo funcionando de punta a punta.</p>
+
+<div class="ask-agent">
+Esto es lo mínimo para poder hablar del tema con propiedad. Login real (registrar usuario, hashear password, emitir tu propio JWT en vez de uno de desarrollo) es un proyecto aparte — si te preguntan en la entrevista, esta lección te alcanza para explicar el mecanismo (stateless, Bearer token, claims, [Authorize]) aunque no hayas construido el login completo.
+</div>
+
+<div class="nav">
+  <a href="0012-async-multithreading.html">← Lección 12: async vs multithreading</a>
+  <a href="0000-project-roadmap.html">Volver al índice del proyecto →</a>
+</div>
+<script src="../assets/quiz.js"></script>
