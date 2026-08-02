@@ -5,7 +5,7 @@
 <h1>Cuando LINQ no alcanza: SQL crudo, stored procedures y agregaciones anidadas</h1>
 <p class="kicker">Objetivo: saber cuándo bajar de LINQ a SQL crudo o a un stored procedure sin perder la infraestructura de EF Core, y resolver el caso más común de la prueba práctica — un total que no está guardado, hay que calcularlo.</p>
 
-<p>Esta lección asume que ya tenés tu <code>DbContext</code> con las 6 entidades (<a href="0006-ef-core-repository-pattern.html">lección 6</a>) y las migraciones aplicadas contra una base real (<a href="0007-migrations.html">lección 7</a>) — todo lo de acá se prueba contra datos reales, no en abstracto. Si ya escribiste los ejercicios de la <a href="0008-tsql-joins-practice.html">lección 8</a>, vas a reconocer el mismo SQL, ahora embebido en C#.</p>
+<p>Esta lección asume que ya tenés tu <code>DbContext</code> con las 6 entidades (<a href="0007-ef-core-repository-pattern.html">lección 7</a>) y las migraciones aplicadas contra una base real (<a href="0008-migrations.html">lección 8</a>) — todo lo de acá se prueba contra datos reales, no en abstracto. Si ya escribiste los ejercicios de la <a href="0006-tsql-joins-practice.html">lección 6</a>, vas a reconocer el mismo SQL, ahora embebido en C#.</p>
 
 <h2>1. Cuándo LINQ no alcanza: SQL crudo y stored procedures</h2>
 <p>LINQ cubre la mayoría de los casos, pero hay cosas que no puede expresar: recursión (CTEs recursivos), window functions (<code>RANK() OVER (PARTITION BY...)</code>), o llamar un stored procedure ya existente. Para eso EF Core te deja bajar a SQL crudo sin perder el resto de la infraestructura (DI, DbContext, tracking).</p>
@@ -96,7 +96,7 @@ var aboveAverage = await _context.Customers
 Dos round-trips a la base de datos no es un error de performance acá — es la opción correcta. Cada query es simple, se traduce a SQL predecible, y es fácil de leer/debuggear. Intentar forzarlo en una sola query (ver (b) abajo) gana un round-trip pero pierde legibilidad — en una entrevista, preferí poder explicar por qué elegiste la versión simple antes que mostrar la más "clever".
 </div>
 
-<p>(b) <strong>Una sola query, con el promedio inline</strong> — más parecido a la subquery correlacionada de T-SQL que viste en la lección 8. EF Core a veces puede traducir esto a un único SQL con subquery escalar, pero es más frágil (puede fallar la traducción según la versión de EF Core, y es más difícil de leer):</p>
+<p>(b) <strong>Una sola query, con el promedio inline</strong> — más parecido a la subquery correlacionada de T-SQL que viste en la lección 6. EF Core a veces puede traducir esto a un único SQL con subquery escalar, pero es más frágil (puede fallar la traducción según la versión de EF Core, y es más difícil de leer):</p>
 <pre><code>var aboveAverage = await _context.Customers
     .Where(c =&gt; c.Orders.Where(o =&gt; o.Status == "Shipped")
                          .SelectMany(o =&gt; o.Items)
@@ -156,11 +156,11 @@ Dos round-trips a la base de datos no es un error de performance acá — es la 
 </div>
 
 <div class="ask-agent">
-Si al traducir el ejercicio 5 o 6 de la lección 8 (subqueries, COUNT DISTINCT) a LINQ te trabás con la sintaxis de <code>SelectMany</code>, pegame tu intento — es más fácil corregir sobre algo escrito que explicar en abstracto.
+Si al traducir el ejercicio 5 o 6 de la lección 6 (subqueries, COUNT DISTINCT) a LINQ te trabás con la sintaxis de <code>SelectMany</code>, pegame tu intento — es más fácil corregir sobre algo escrito que explicar en abstracto.
 </div>
 
 <div class="nav">
-  <a href="0008-tsql-joins-practice.html">← Lección 8: práctica de JOINs</a>
+  <a href="0008-migrations.html">← Lección 8: migraciones paso a paso</a>
   <a href="0000-project-roadmap.html">Índice</a>
   <a href="0010-repository-structure.html">Siguiente: organizando Models y Repositories →</a>
 </div>

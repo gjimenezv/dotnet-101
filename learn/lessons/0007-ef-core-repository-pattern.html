@@ -1,11 +1,15 @@
-<title>Lección 6 · EF Core + repository pattern</title>
+<title>Lección 7 · EF Core + repository pattern</title>
 <link rel="stylesheet" href="../assets/style.css">
 
-<p class="progress-badge">Lección 6 de 10</p>
+<p class="progress-badge">Lección 7 de 10</p>
 <h1>Entity Framework Core y el repository pattern</h1>
 <p class="kicker">Objetivo: entender DbContext/DbSet, leer/escribir datos con LINQ, configurar el modelo con Fluent API, y poder explicar con criterio cuándo (y por qué) agregar una capa de repository encima.</p>
 
 <p>Esta lección conecta las piezas anteriores: los DTOs de la <a href="0003-aspnet-core-web-api.html">lección 3</a>, el LINQ que adelantamos en la <a href="0001-csharp-fundamentals-for-js-devs.html">lección 1</a>, y las tablas de la <a href="0005-tsql-fundamentals.html">lección 5</a> — EF Core es la capa que las une.</p>
+
+<div class="callout bridge">
+Los JOINs que acabás de escribir a mano en la <a href="0006-tsql-joins-practice.html">lección 6</a> son exactamente lo que <code>.Include()</code> hace por vos más abajo — mismo resultado, otra sintaxis. Cada vez que dudes qué hace un método LINQ, preguntate "¿qué JOIN/WHERE/GROUP BY de T-SQL sería esto?" — ya lo escribiste una vez a mano.
+</div>
 
 <h2>1. ¿Qué es EF Core?</h2>
 <p>Un ORM (Object-Relational Mapper): traduce clases de C# a tablas SQL y viceversa, para que escribas LINQ en vez de T-SQL a mano en tu código de aplicación. Es similar a lo que Prisma o TypeORM hacen en el mundo Node — si conocés alguno, la mecánica mental es la misma.</p>
@@ -40,7 +44,7 @@ public class Product
 </table>
 
 <div class="callout bridge">
-<code>OnModelCreating</code> es donde vive la <strong>Fluent API</strong> — la forma de configurar EF Core con código en vez de atributos sobre las propiedades. Se ejecuta <strong>una sola vez</strong>, la primera vez que tu app usa el <code>DbContext</code> (no en cada request, no en cada query) — EF Core arma el modelo completo, lo cachea en memoria, y lo reusa. Pensalo como un schema de Prisma o de Mongoose: no describe una query puntual, describe las reglas permanentes de cómo tus clases se convierten en tablas. Ahí configurás lo que una propiedad simple no puede expresar: precisión de un <code>decimal</code>, qué pasa al borrar en una relación (<code>OnDelete</code>), claves compuestas, índices, conversiones de tipo, datos semilla (<code>HasData</code>). Todo lo que hicimos con <code>modelBuilder</code> en esta lección y en la <a href="0007-migrations.html">lección 7</a> vive acá adentro, en un solo método.
+<code>OnModelCreating</code> es donde vive la <strong>Fluent API</strong> — la forma de configurar EF Core con código en vez de atributos sobre las propiedades. Se ejecuta <strong>una sola vez</strong>, la primera vez que tu app usa el <code>DbContext</code> (no en cada request, no en cada query) — EF Core arma el modelo completo, lo cachea en memoria, y lo reusa. Pensalo como un schema de Prisma o de Mongoose: no describe una query puntual, describe las reglas permanentes de cómo tus clases se convierten en tablas. Ahí configurás lo que una propiedad simple no puede expresar: precisión de un <code>decimal</code>, qué pasa al borrar en una relación (<code>OnDelete</code>), claves compuestas, índices, conversiones de tipo, datos semilla (<code>HasData</code>). Todo lo que hicimos con <code>modelBuilder</code> en esta lección y en la <a href="0008-migrations.html">lección 8</a> vive acá adentro, en un solo método.
 </div>
 
 <p>Otras reglas comunes que también van en <code>OnModelCreating</code> — mismo flujo siempre: cambiás esto, generás una migración nueva, la aplicás.</p>
@@ -196,8 +200,8 @@ Esta es probablemente la lección más densa hasta ahora — si la pregunta de r
 </div>
 
 <div class="nav">
-  <a href="0005-tsql-fundamentals.html">← Lección 5: T-SQL fundamentals</a>
+  <a href="0006-tsql-joins-practice.html">← Lección 6: práctica de JOINs</a>
   <a href="0000-project-roadmap.html">Índice</a>
-  <a href="0007-migrations.html">Siguiente: migraciones paso a paso →</a>
+  <a href="0008-migrations.html">Siguiente: migraciones paso a paso →</a>
 </div>
 <script src="../assets/quiz.js"></script>

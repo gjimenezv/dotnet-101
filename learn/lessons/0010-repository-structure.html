@@ -3,9 +3,9 @@
 
 <p class="progress-badge">Lección 10 de 10</p>
 <h1>Models vs Repositories: quién hace qué, y cómo se organizan</h1>
-<p class="kicker">Objetivo: saber identificar qué entidad necesita su propio repository, cómo estructurar las carpetas, y poder justificar cuándo está bien mezclar acceso directo con repository — la pregunta natural después de la lección 6.</p>
+<p class="kicker">Objetivo: saber identificar qué entidad necesita su propio repository, cómo estructurar las carpetas, y poder justificar cuándo está bien mezclar acceso directo con repository — la pregunta natural después de la lección 7.</p>
 
-<p>En la <a href="0006-ef-core-repository-pattern.html">lección 6</a> viste <em>qué</em> es el repository pattern. Acá va el paso siguiente, más práctico: cuando tenés 6 entidades en tu proyecto, ¿armás 6 repositories? ¿Dónde vive cada archivo? ¿Y está mal que algunas entidades usen repository y otras no?</p>
+<p>En la <a href="0007-ef-core-repository-pattern.html">lección 7</a> viste <em>qué</em> es el repository pattern. Acá va el paso siguiente, más práctico: cuando tenés 6 entidades en tu proyecto, ¿armás 6 repositories? ¿Dónde vive cada archivo? ¿Y está mal que algunas entidades usen repository y otras no?</p>
 
 <h2>1. La responsabilidad de cada carpeta</h2>
 <p>La distinción es simple una vez que la ves: <strong>Models describe qué es el dato. Repositories describe cómo se consigue/guarda.</strong></p>
@@ -201,7 +201,7 @@ public class OrderRepository : IOrderRepository
 </div>
 
 <h2>Checkpoint del proyecto</h2>
-<p>Ejemplo de punta a punta — <code>ICustomerRepository</code>, con un método simple y uno con la lógica que ya viste en la lección 8 (top spenders):</p>
+<p>Ejemplo de punta a punta — <code>ICustomerRepository</code>, con un método simple y uno con la lógica que ya viste en la lección 6 (top spenders):</p>
 <pre><code>public interface ICustomerRepository
 {
     Task&lt;Customer?&gt; GetByIdAsync(int id);

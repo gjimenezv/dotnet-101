@@ -13,8 +13,8 @@ Vos creás el proyecto. Yo no voy a tocar tu carpeta ni escribir tus modelos/mig
 <table>
 <tr><th>Pide el posting</th><th>Se practica en</th><th>Se demuestra en</th></tr>
 <tr><td>APIs/backend robustas en C# y .NET</td><td>Lecciones 1, 2, 3, 4</td><td>Tu proyecto: Controllers</td></tr>
-<tr><td>SQL Server / T-SQL, queries y stored procedures</td><td>Lecciones 5, 8, 9</td><td>SQL Server real (container Docker) + endpoints con LINQ, <code>FromSqlRaw</code> y stored procedures</td></tr>
-<tr><td>Entity Framework y repository/data access pattern</td><td>Lecciones 4, 6, 7, 10</td><td>Tu <code>DbContext</code>, tus migraciones, tu carpeta <code>Repositories/</code></td></tr>
+<tr><td>SQL Server / T-SQL, queries y stored procedures</td><td>Lecciones 5, 6, 9</td><td>SQL Server real (container Docker) + endpoints con LINQ, <code>FromSqlRaw</code> y stored procedures</td></tr>
+<tr><td>Entity Framework y repository/data access pattern</td><td>Lecciones 4, 7, 8, 10</td><td>Tu <code>DbContext</code>, tus migraciones, tu carpeta <code>Repositories/</code></td></tr>
 <tr><td>Code review, debugging, calidad</td><td>Implícito en cada checkpoint (reviso lo que escribís antes de avanzar)</td><td>—</td></tr>
 </table>
 <p class="source">Ver <code>MISSION.md</code> para el detalle completo de objetivos y qué quedó fuera de alcance (React, AWS, Jenkins) por la ventana de tiempo.</p>
@@ -33,7 +33,7 @@ Vos creás el proyecto. Yo no voy a tocar tu carpeta ni escribir tus modelos/mig
 </table>
 
 <div class="callout tip">
-No hay datos de ejemplo acá a propósito — para no perder tiempo inventando filas, <code>/home/asd/dev/ShopApi-reference-solution/seed-data.sql</code> tiene <code>INSERT</code>s listos (mismo dataset que la <a href="0008-tsql-joins-practice.html">lección 8</a>). Corré tu migración primero, ese script después.
+No hay datos de ejemplo acá a propósito — para no perder tiempo inventando filas, <code>/home/asd/dev/ShopApi-reference-solution/seed-data.sql</code> tiene <code>INSERT</code>s listos (mismo dataset que la <a href="0006-tsql-joins-practice.html">lección 6</a>). Corré tu migración primero, ese script después.
 </div>
 
 <h2>3. Endpoints — combinando LINQ, SQL crudo y stored procedures</h2>
@@ -130,10 +130,10 @@ Los otros 8 endpoints no ganan nada metiendo un Service de por medio — son un 
 <tr><td><a href="0003-aspnet-core-web-api.html">3. ASP.NET Core Web API</a></td><td>Controllers, rutas, DTOs, inyección de dependencias</td><td>Reconocer la forma de un endpoint antes de escribir el tuyo</td></tr>
 <tr><td><a href="0004-project-setup.html">4. Crear el proyecto + conexión</a></td><td><code>dotnet new webapi</code>, paquetes EF Core, connection string a SQL Server real</td><td>Tener tu propio proyecto compilando y apuntando a una base real</td></tr>
 <tr><td><a href="0005-tsql-fundamentals.html">5. T-SQL fundamentals</a></td><td>SELECT, JOIN, GROUP BY/HAVING, stored procedures</td><td>Leer/escribir el SQL detrás de cualquier query que vayas a traducir a LINQ</td></tr>
-<tr><td><a href="0006-ef-core-repository-pattern.html">6. EF Core + repository pattern</a></td><td>DbContext, DbSet, LINQ, cuándo usar repository</td><td>Escribir tu <code>DbContext</code> con las 6 entidades de la sección 2</td></tr>
-<tr><td><a href="0007-migrations.html">7. Migraciones paso a paso</a></td><td>Ciclo completo: modelo → migración → base de datos real, con <code>Category</code> de ejemplo</td><td>Migrar el resto de tus entidades vos solo</td></tr>
-<tr><td><a href="0008-tsql-joins-practice.html">8. Práctica de JOINs</a></td><td>6 ejercicios con motor SQL real en el navegador</td><td>Escribir en T-SQL las queries que después traducís a LINQ en tus endpoints</td></tr>
-<tr><td><a href="0009-ef-core-advanced-querying.html">9. SQL crudo, stored procedures y queries anidadas</a></td><td><code>FromSqlRaw</code>/<code>ExecuteSqlRaw</code>, tipos keyless, agregaciones anidadas (sum de sum)</td><td>Resolver los endpoints de la sección 3 que LINQ solo no puede</td></tr>
+<tr><td><a href="0006-tsql-joins-practice.html">6. Práctica de JOINs</a></td><td>6 ejercicios con motor SQL real en el navegador, feedback inmediato</td><td>Escribir JOINs/GROUP BY/subqueries de memoria, sin mirar la solución primero</td></tr>
+<tr><td><a href="0007-ef-core-repository-pattern.html">7. EF Core + repository pattern</a></td><td>DbContext, DbSet, LINQ, cuándo usar repository</td><td>Escribir tu <code>DbContext</code> con las 6 entidades de la sección 2 — el mismo SQL de la lección 6, ahora en C#</td></tr>
+<tr><td><a href="0008-migrations.html">8. Migraciones paso a paso</a></td><td>Ciclo completo: modelo → migración → base de datos real, con <code>Category</code> de ejemplo</td><td>Migrar el resto de tus entidades vos solo</td></tr>
+<tr><td><a href="0009-ef-core-advanced-querying.html">9. SQL crudo, stored procedures y queries anidadas</a></td><td><code>FromSqlRaw</code>/<code>ExecuteSqlRaw</code>, tipos keyless, agregaciones anidadas (sum de sum)</td><td>Resolver los endpoints de la sección 3 que LINQ solo no puede, contra tu base ya migrada</td></tr>
 <tr><td><a href="0010-repository-structure.html">10. Organizando Repositories</a></td><td>Aggregate roots, estructura de carpetas, cuándo mezclar con DbContext directo</td><td>Armar tu carpeta <code>Repositories/</code> con criterio</td></tr>
 </table>
 
@@ -141,9 +141,9 @@ Los otros 8 endpoints no ganan nada metiendo un Service de por medio — son un 
 <ul>
 <li>☐ Proyecto creado con <code>dotnet new webapi</code>, compila (lección 4)</li>
 <li>☐ Connection string propia apuntando a SQL Server real (lección 4)</li>
-<li>☐ Las 6 entidades definidas en <code>Models/</code> (lección 6)</li>
-<li>☐ <code>DbContext</code> con los 6 <code>DbSet</code> (lección 6)</li>
-<li>☐ Migraciones generadas y aplicadas — tablas reales en SQL Server (lección 7)</li>
+<li>☐ Las 6 entidades definidas en <code>Models/</code> (lección 7)</li>
+<li>☐ <code>DbContext</code> con los 6 <code>DbSet</code> (lección 7)</li>
+<li>☐ Migraciones generadas y aplicadas — tablas reales en SQL Server (lección 8)</li>
 <li>☐ Repositories para las entidades que correspondan (lección 10)</li>
 <li>☐ <code>OrderService</code> armado, <code>OrdersController</code> lo usa en vez de hablarle directo al repository (sección 5)</li>
 <li>☐ Los 9 endpoints de la sección 3 — LINQ, SQL crudo y stored procedure, en orden de complejidad</li>

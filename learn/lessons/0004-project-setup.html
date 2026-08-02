@@ -31,7 +31,7 @@ dotnet add package Microsoft.EntityFrameworkCore.Design
 <table>
 <tr><th>Paquete</th><th>Para qué sirve</th></tr>
 <tr><td><code>Microsoft.EntityFrameworkCore.SqlServer</code></td><td>El "driver"/provider — le dice a EF Core cómo hablar con SQL Server específicamente (existe uno distinto por motor de base de datos)</td></tr>
-<tr><td><code>Microsoft.EntityFrameworkCore.Design</code></td><td>Herramientas de diseño — necesario para que <code>dotnet ef migrations add</code> funcione (lección 7)</td></tr>
+<tr><td><code>Microsoft.EntityFrameworkCore.Design</code></td><td>Herramientas de diseño — necesario para que <code>dotnet ef migrations add</code> funcione (lección 8)</td></tr>
 </table>
 
 <h2>3. La base de datos: ya existe, no necesitás instalar nada</h2>
@@ -43,7 +43,7 @@ Para esta prueba de concepto ya hay una instancia de <strong>SQL Server 2022 rea
 <tr><td>Server</td><td><code>localhost,1433</code></td></tr>
 <tr><td>User</td><td><code>sa</code></td></tr>
 <tr><td>Password</td><td><code>Interview2026!Study</code></td></tr>
-<tr><td>Database</td><td>Elegí un nombre propio (ej. <code>TuProyectoDb</code>) — EF Core la crea sola cuando corras tu primera migración en la lección 7. No uses <code>ShopApi</code>, ese nombre ya tiene datos de un proyecto de referencia.</td></tr>
+<tr><td>Database</td><td>Elegí un nombre propio (ej. <code>TuProyectoDb</code>) — EF Core la crea sola cuando corras tu primera migración en la lección 8. No uses <code>ShopApi</code>, ese nombre ya tiene datos de un proyecto de referencia.</td></tr>
 </table>
 
 <h2>4. La connection string</h2>
@@ -57,13 +57,13 @@ Para esta prueba de concepto ya hay una instancia de <strong>SQL Server 2022 rea
 <p><code>TrustServerCertificate=True</code> es necesario porque el container usa un certificado autofirmado — en producción real esto se maneja distinto (certificado válido), pero para desarrollo local es estándar.</p>
 
 <h2>5. Registrar el DbContext en Program.cs</h2>
-<p>Todavía no tenés un <code>DbContext</code> propio (eso es la lección 6), pero así se ve el cableado — es el mismo patrón de <code>AddScoped</code> que ya viste en la lección 3, EF Core lo hace por vos con un método especializado:</p>
+<p>Todavía no tenés un <code>DbContext</code> propio (eso es la lección 7), pero así se ve el cableado — es el mismo patrón de <code>AddScoped</code> que ya viste en la lección 3, EF Core lo hace por vos con un método especializado:</p>
 <pre><code>using Microsoft.EntityFrameworkCore;
 
 builder.Services.AddDbContext&lt;TuDbContext&gt;(options =&gt;
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 </code></pre>
-<p>Esto no va a compilar todavía porque <code>TuDbContext</code> no existe — normal, lo creás en la lección 6. Guardá este patrón, lo vas a pegar tal cual cuando llegues ahí.</p>
+<p>Esto no va a compilar todavía porque <code>TuDbContext</code> no existe — normal, lo creás en la lección 7. Guardá este patrón, lo vas a pegar tal cual cuando llegues ahí.</p>
 
 <h2>Checkpoint del proyecto</h2>
 <p>Antes de seguir a la lección 5, deberías tener:</p>

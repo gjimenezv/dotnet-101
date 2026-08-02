@@ -1,11 +1,11 @@
-<title>Lección 7 · Migraciones paso a paso</title>
+<title>Lección 8 · Migraciones paso a paso</title>
 <link rel="stylesheet" href="../assets/style.css">
 
-<p class="progress-badge">Lección 7 de 10</p>
+<p class="progress-badge">Lección 8 de 10</p>
 <h1>Migraciones de EF Core, de una entidad a las seis</h1>
 <p class="kicker">Objetivo: generar y aplicar tu primera migración con una sola entidad de ejemplo, y después repetir el proceso vos solo para el resto del schema.</p>
 
-<p>En la <a href="0006-ef-core-repository-pattern.html">lección 6</a> viste qué es <code>DbContext</code>/<code>DbSet</code> conceptualmente. Acá va el paso que faltaba: cómo esas clases C# se convierten en tablas reales dentro de tu base de datos.</p>
+<p>En la <a href="0007-ef-core-repository-pattern.html">lección 7</a> viste qué es <code>DbContext</code>/<code>DbSet</code> conceptualmente. Acá va el paso que faltaba: cómo esas clases C# se convierten en tablas reales dentro de tu base de datos.</p>
 
 <h2>1. Qué es una migración</h2>
 <p>Una migración es un archivo C# generado automáticamente que describe <em>el cambio</em> entre el estado anterior de tu modelo y el estado nuevo, traducido a instrucciones SQL (<code>CREATE TABLE</code>, <code>ALTER TABLE</code>...). Es el mismo concepto que una migración de Prisma o Django, pero el archivo generado es C#, no SQL crudo ni JSON.</p>
@@ -27,7 +27,7 @@ public class Category
 }
 </code></pre>
 
-<p><strong>Paso 2 — agregarla al DbContext</strong> (el que creaste en la lección 6):</p>
+<p><strong>Paso 2 — agregarla al DbContext</strong> (el que creaste en la lección 7):</p>
 <pre><code>public class TuDbContext : DbContext
 {
     public TuDbContext(DbContextOptions&lt;TuDbContext&gt; options) : base(options) { }
@@ -55,7 +55,7 @@ Verificá que la tabla se creó de verdad — no confíes solo en "no tiró erro
 </div>
 
 <div class="callout tip">
-Una vez que tu migración crea las tablas, necesitás datos para probar tus endpoints. No pierdas tiempo inventando filas a mano: <code>/home/asd/dev/ShopApi-reference-solution/seed-data.sql</code> tiene <code>INSERT</code>s listos (T-SQL, con <code>SET IDENTITY_INSERT</code>) para las 6 entidades, mismo dataset que la lección 8. Es solo datos — vos seguís siendo quien crea el modelo y corre la migración; esto simplemente te ahorra tipear 60 filas de prueba.
+Una vez que tu migración crea las tablas, necesitás datos para probar tus endpoints. No pierdas tiempo inventando filas a mano: <code>/home/asd/dev/ShopApi-reference-solution/seed-data.sql</code> tiene <code>INSERT</code>s listos (T-SQL, con <code>SET IDENTITY_INSERT</code>) para las 6 entidades, mismo dataset que la <a href="0006-tsql-joins-practice.html">lección 6</a>. Es solo datos — vos seguís siendo quien crea el modelo y corre la migración; esto simplemente te ahorra tipear 60 filas de prueba.
 </div>
 
 <h2>3. Ahora el resto — a vos</h2>
@@ -117,8 +117,8 @@ Si te sale un error al migrar <code>Employee</code> distinto al de "multiple cas
 </div>
 
 <div class="nav">
-  <a href="0006-ef-core-repository-pattern.html">← Lección 6: EF Core + repository pattern</a>
+  <a href="0007-ef-core-repository-pattern.html">← Lección 7: EF Core + repository pattern</a>
   <a href="0000-project-roadmap.html">Índice</a>
-  <a href="0008-tsql-joins-practice.html">Siguiente: práctica de JOINs →</a>
+  <a href="0009-ef-core-advanced-querying.html">Siguiente: SQL crudo, stored procedures y queries anidadas →</a>
 </div>
 <script src="../assets/quiz.js"></script>

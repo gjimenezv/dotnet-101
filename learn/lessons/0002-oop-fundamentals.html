@@ -5,7 +5,7 @@
 <h1>Clases, constructores y OOP en C#</h1>
 <p class="kicker">Objetivo: recordar cómo se arma una clase — constructor, modificadores de acceso, interfaces, clases abstractas, herencia — porque todo lo que viene (controllers, DI, EF Core) es esto.</p>
 
-<p>C# es un lenguaje orientado a objetos "de verdad": no hay forma de escribir código fuera de una clase. JS te dejaba usar objetos, funciones sueltas o clases como te convenga; C# te obliga a pensar en términos de clases, contratos (interfaces) y jerarquías. Vale la pena fijar esto bien porque el <a href="0003-aspnet-core-web-api.html">controller</a> y la <a href="0006-ef-core-repository-pattern.html">inyección de dependencias</a> de las próximas lecciones son, literalmente, esto en acción.</p>
+<p>C# es un lenguaje orientado a objetos "de verdad": no hay forma de escribir código fuera de una clase. JS te dejaba usar objetos, funciones sueltas o clases como te convenga; C# te obliga a pensar en términos de clases, contratos (interfaces) y jerarquías. Vale la pena fijar esto bien porque el <a href="0003-aspnet-core-web-api.html">controller</a> y la <a href="0007-ef-core-repository-pattern.html">inyección de dependencias</a> de las próximas lecciones son, literalmente, esto en acción.</p>
 
 <h2>1. Anatomía de una clase</h2>
 <pre><code>public class User
@@ -149,7 +149,7 @@ C# solo permite herencia simple: una clase hereda de <strong>una sola</strong> c
 
 <h2>Por qué esto importa para el puesto</h2>
 <div class="callout tip">
-Cuando en la lección 3 escribas <code>public ProductsController(IProductService service)</code>, eso es un <strong>constructor</strong> recibiendo una <strong>interfaz</strong> como parámetro. Cuando en la lección 6 EF Core defina <code>public class Product { get; set; }</code>, eso es una clase simple con propiedades. Todo el vocabulario de "robust, scalable APIs" del puesto se construye sobre estos 4 conceptos.
+Cuando en la lección 3 escribas <code>public ProductsController(IProductService service)</code>, eso es un <strong>constructor</strong> recibiendo una <strong>interfaz</strong> como parámetro. Cuando en la lección 7 EF Core defina <code>public class Product { get; set; }</code>, eso es una clase simple con propiedades. Todo el vocabulario de "robust, scalable APIs" del puesto se construye sobre estos 4 conceptos.
 </div>
 
 <h2>Ejercicio práctico</h2>
