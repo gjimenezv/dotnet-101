@@ -1,7 +1,7 @@
-<title>Lección 9 · Organizando Models y Repositories</title>
+<title>Lección 10 · Organizando Models y Repositories</title>
 <link rel="stylesheet" href="../assets/style.css">
 
-<p class="progress-badge">Lección 9 · Práctica extra (arquitectura)</p>
+<p class="progress-badge">Lección 10 de 10</p>
 <h1>Models vs Repositories: quién hace qué, y cómo se organizan</h1>
 <p class="kicker">Objetivo: saber identificar qué entidad necesita su propio repository, cómo estructurar las carpetas, y poder justificar cuándo está bien mezclar acceso directo con repository — la pregunta natural después de la lección 6.</p>
 
@@ -21,7 +21,66 @@
 Un <code>Customer.cs</code> es tu <code>interface Customer { ... }</code> de TypeScript — describe la forma, no sabe que existe una base de datos. Un <code>CustomerRepository.cs</code> es la función <code>fetchCustomer()</code> de tu API client — sabe cómo ir a buscarlo, pero no define qué es un cliente.
 </div>
 
-<h2>2. ¿Un repository por modelo?</h2>
+<h2>2. Cómo fluye una request, capa por capa</h2>
+<p>Juntando las piezas (Controller, Service opcional, Repository, Model, <code>DbContext</code>/<code>DbSet</code>) en un solo diagrama — <code>GET /api/customers/5</code> de punta a punta:</p>
+<pre><code>HTTP Request:  GET /api/customers/5
+        │
+        ▼
+┌─────────────────────────────┐
+│ Controller                   │  CustomersController
+│ recibe la request HTTP,      │  · lee la ruta/params
+│ delega, arma el response     │  · llama al repository (inyectado por DI)
+└──────────────┬───────────────┘  · nunca importa EF Core
+               │ await _repo.GetByIdAsync(5)
+               ┊
+               ┊  (acá iría un Service SI hubiera lógica de negocio
+               ┊   que orquestar — validar reglas, tocar más de un
+               ┊   repository. Este proyecto no lo necesita, por eso
+               ┊   el Controller llama al Repository directo.)
+               ┊
+               ▼
+┌─────────────────────────────┐
+│ Repository                   │  ICustomerRepository → CustomerRepository
+│ arma la consulta,            │  · sabe LINQ / SQL crudo
+│ no sabe nada de HTTP         │  · no sabe qué es un status code
+└──────────────┬───────────────┘
+               │ _context.Customers.FirstOrDefaultAsync(...)
+               ▼
+┌─────────────────────────────┐
+│ DbContext / DbSet&lt;T&gt;         │  _context.Customers
+│ traduce LINQ → SQL,          │  · un DbSet por entidad raíz
+│ trackea cambios              │  · OnModelCreating vive acá
+└──────────────┬───────────────┘
+               │ genera y ejecuta
+               ▼
+┌─────────────────────────────┐
+│ SQL Server                   │  SELECT * FROM Customers
+│                               │  WHERE Id = 5
+└──────────────┬───────────────┘
+               │ filas crudas
+               ▼
+      EF Core materializa las filas en objetos .NET
+               │
+               ▼
+┌─────────────────────────────┐
+│ Model                        │  Customer { Id, Name, City, ... }
+│ la forma del dato,           │  · viaja de vuelta por cada capa
+│ cero lógica de acceso        │  · el Repository lo devuelve tal cual
+└──────────────┬───────────────┘
+               │ return customer;  (Repository → Controller)
+               ▼
+      Controller serializa el Model a JSON
+               │
+               ▼
+HTTP Response: 200 OK  { "id": 5, "name": "...", "city": "..." }
+</code></pre>
+<p>La regla que se ve en el diagrama: cada capa solo conoce a la de al lado. El Controller no sabe qué es un <code>DbSet</code>; el Repository no sabe qué es un <code>HttpContext</code>; el Model no sabe que existe ninguna de las dos. Si en algún momento estás por escribir LINQ dentro de un Controller, o devolver un <code>Customer</code> con propiedades HTTP pegadas, es señal de que se está mezclando una capa con otra.</p>
+
+<div class="callout bridge">
+Ojo con confundir Repository con Service (el <code>IProductService</code> que viste en la <a href="0003-aspnet-core-web-api.html">lección 3</a> era solo un ejemplo genérico de DI, antes de meter EF Core). No es lo mismo: un <strong>Repository</strong> solo sabe hacer queries/writes contra la base — es tu capa de acceso a datos, como un wrapper de Prisma. Un <strong>Service</strong> (el equivalente al de Express) orquesta lógica de negocio: puede llamar a varios repositories, validar reglas, decidir qué pasa si algo falla. Ejemplo: <code>CustomerRepository.GetTopSpendersAsync()</code> es una query, vive en el repository. "Crear una Order: chequear stock en Product, calcular el total, aplicar descuento si el Customer es VIP, recién ahí guardar" ya es una regla de negocio que coordina dos repositories — eso iría en un <code>OrderService</code>, no en ningún repository. Este proyecto no tiene una capa de Service explícita porque la lógica es mayormente queries; si tuvieras algo como el ejemplo de <code>Order</code>, ahí sí insertarías un Service entre el Controller y los Repositories.
+</div>
+
+<h2>3. ¿Un repository por modelo?</h2>
 <p>No — un repository por <strong>aggregate root</strong>, no por modelo. Un aggregate root es una entidad que tiene sentido pedir/guardar <em>por sí sola</em>. Todo lo que solo existe <em>en el contexto de</em> otra entidad se consulta a través del repository de esa otra entidad.</p>
 
 <p><strong>La pregunta que lo decide:</strong> "¿alguna vez voy a decir <em>'dame este X'</em> sin pasar primero por otra entidad?" Si sí, tiene su propio repository. Si no, no.</p>
@@ -41,7 +100,7 @@ Un <code>Customer.cs</code> es tu <code>interface Customer { ... }</code> de Typ
 El error común es crear un repository por cada clase en <code>Models/</code> sin pensar en esto — termina siendo puro boilerplate (un <code>IOrderItemRepository</code> con un solo método que nadie llama directo). Si en la entrevista te preguntan por qué <code>OrderItem</code> no tiene repository, esta es la respuesta.
 </div>
 
-<h2>3. Estructura de carpetas</h2>
+<h2>4. Estructura de carpetas</h2>
 <pre><code>ShopApi/
   Models/              (ya lo tenés — entidades, sin lógica de acceso a datos)
   Data/                (ya lo tenés — DbContext)
@@ -57,7 +116,7 @@ El error común es crear un repository por cada clase en <code>Models/</code> si
 </code></pre>
 <p>Un archivo por tipo — interfaz e implementación separadas, pero en la misma carpeta (no <code>Repositories/Interfaces/</code> vs <code>Repositories/Implementations/</code>, eso es más ruido que ayuda). Carpeta plana; solo si el proyecto crece mucho tiene sentido anidar por agregado (<code>Repositories/Customers/</code>, <code>Repositories/Orders/</code>).</p>
 
-<h2>4. Crear y editar cada uno</h2>
+<h2>5. Crear y editar cada uno</h2>
 <p><strong>Un modelo se edita</strong> cuando cambia la forma del dato — agregás una propiedad, agregás una navigation property. No debería tener ningún <code>using Microsoft.EntityFrameworkCore</code> ni lógica de consulta adentro.</p>
 <pre><code>public class Customer
 {
@@ -88,7 +147,7 @@ public class OrderRepository : IOrderRepository
 }
 </code></pre>
 
-<h2>5. ¿Está bien mezclar repository y DbContext directo en el mismo proyecto?</h2>
+<h2>6. ¿Está bien mezclar repository y DbContext directo en el mismo proyecto?</h2>
 <p><strong>Sí — y es más común de lo que parece.</strong> No es una regla de todo-o-nada.</p>
 <table>
 <tr><th>Repository</th><th>DbContext/DbSet directo</th></tr>
@@ -171,7 +230,7 @@ Si al aplicar la regla del "¿lo pido solo o no?" a tu propio schema te queda al
 </div>
 
 <div class="nav">
-  <a href="0008-tsql-joins-practice.html">← Lección 8: práctica de JOINs</a>
+  <a href="0009-ef-core-advanced-querying.html">← Lección 9: SQL crudo, stored procedures y queries anidadas</a>
   <a href="0000-project-roadmap.html">Volver al índice del proyecto →</a>
 </div>
 <script src="../assets/quiz.js"></script>

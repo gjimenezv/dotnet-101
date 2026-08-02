@@ -1,0 +1,167 @@
+<title>Lección 9 · SQL crudo, stored procedures y queries anidadas</title>
+<link rel="stylesheet" href="../assets/style.css">
+
+<p class="progress-badge">Lección 9 de 10</p>
+<h1>Cuando LINQ no alcanza: SQL crudo, stored procedures y agregaciones anidadas</h1>
+<p class="kicker">Objetivo: saber cuándo bajar de LINQ a SQL crudo o a un stored procedure sin perder la infraestructura de EF Core, y resolver el caso más común de la prueba práctica — un total que no está guardado, hay que calcularlo.</p>
+
+<p>Esta lección asume que ya tenés tu <code>DbContext</code> con las 6 entidades (<a href="0006-ef-core-repository-pattern.html">lección 6</a>) y las migraciones aplicadas contra una base real (<a href="0007-migrations.html">lección 7</a>) — todo lo de acá se prueba contra datos reales, no en abstracto. Si ya escribiste los ejercicios de la <a href="0008-tsql-joins-practice.html">lección 8</a>, vas a reconocer el mismo SQL, ahora embebido en C#.</p>
+
+<h2>1. Cuándo LINQ no alcanza: SQL crudo y stored procedures</h2>
+<p>LINQ cubre la mayoría de los casos, pero hay cosas que no puede expresar: recursión (CTEs recursivos), window functions (<code>RANK() OVER (PARTITION BY...)</code>), o llamar un stored procedure ya existente. Para eso EF Core te deja bajar a SQL crudo sin perder el resto de la infraestructura (DI, DbContext, tracking).</p>
+
+<table>
+<tr><th>Método</th><th>Para qué</th><th>Devuelve</th></tr>
+<tr><td><code>FromSqlRaw</code> / <code>FromSqlInterpolated</code></td><td>SELECT que mapea a un tipo (entidad o keyless) — sigue siendo <code>IQueryable</code>, se puede encadenar más LINQ después</td><td>Filas tipadas</td></tr>
+<tr><td><code>ExecuteSqlRawAsync</code> / <code>ExecuteSqlInterpolatedAsync</code></td><td>INSERT/UPDATE/DELETE, o un EXEC que no devuelve filas</td><td><code>int</code> (filas afectadas)</td></tr>
+</table>
+
+<div class="callout warn">
+Usá siempre <code>FromSqlInterpolated</code> (con <code>$"..."</code>) o pasá los parámetros como argumentos extra de <code>FromSqlRaw</code> — <strong>nunca</strong> concatenés el valor directo en el string. EF Core parametriza automáticamente en ambos casos; concatenar a mano te expone a SQL injection, el mismo error que en cualquier otro lenguaje.
+</div>
+
+<p><strong>Caso 1 — el resultado es una entidad completa</strong> (ej. productos con precio mayor a X): es directo, porque las columnas calzan 1 a 1 con tu clase <code>Product</code>.</p>
+<pre><code>var caros = await _context.Products
+    .FromSqlInterpolated($"SELECT * FROM Products WHERE Price &gt; {minPrice}")
+    .ToListAsync();
+</code></pre>
+
+<p><strong>Caso 2 — el resultado NO es una entidad</strong> (ej. el stored procedure <code>GetTopCustomers</code> de la lección 5 devuelve <code>CustomerId</code> + <code>OrderCount</code>, no un <code>Customer</code> completo). Necesitás un tipo "keyless" — una clase sin PK, registrada en el modelo solo para mapear ese resultado:</p>
+<pre><code>// Un DTO simple, sin Id
+public class TopCustomerResult
+{
+    public int CustomerId { get; set; }
+    public int OrderCount { get; set; }
+}
+
+// En OnModelCreating de tu DbContext:
+modelBuilder.Entity&lt;TopCustomerResult&gt;().HasNoKey();
+
+// En el repository:
+var top = await _context.Database
+    .SqlQueryRaw&lt;TopCustomerResult&gt;("EXEC GetTopCustomers @MinOrders = {0}", minOrders)
+    .ToListAsync();
+</code></pre>
+
+<p class="source">Fuente: <a href="https://learn.microsoft.com/en-us/ef/core/querying/sql-queries" target="_blank">Querying with raw SQL in EF Core</a> — Microsoft Learn.</p>
+
+<h2>2. Queries anidadas: cuando el dato no está guardado, hay que calcularlo</h2>
+<p>Fijate en el schema de la <a href="0000-project-roadmap.html">definición del proyecto</a>: <code>Order</code> <strong>no tiene</strong> un campo <code>Total</code>. Es a propósito — guardar un total calculable es duplicar datos que se pueden desincronizar (¿qué pasa si editás un <code>OrderItem</code> y te olvidás de actualizar el total del <code>Order</code>?). El total real sale de sumar <code>Quantity * UnitPrice</code> de cada <code>OrderItem</code>. Esto convierte cualquier query sobre "el total de una orden" en una <strong>agregación anidada</strong> — un <code>Sum</code> adentro de otro nivel de datos.</p>
+
+<div class="callout bridge">
+Es el mismo patrón que <code>orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.qty * i.price, 0), 0)</code> en JS — un <code>reduce</code> adentro de otro. En LINQ, la versión "sum de sum" se escribe con <code>SelectMany</code> (tu <code>.flatMap()</code>) para aplanar antes de sumar, o directo con <code>.Sum()</code> sobre la navigation property si es un solo nivel.
+</div>
+
+<p><strong>Nivel 1 — total de una sola orden</strong> (un <code>Sum</code> sobre sus <code>Items</code>):</p>
+<pre><code>var orderTotals = await _context.Orders
+    .Select(o =&gt; new
+    {
+        o.Id,
+        o.CustomerId,
+        Total = o.Items.Sum(oi =&gt; oi.Quantity * oi.UnitPrice)
+    })
+    .ToListAsync();
+</code></pre>
+
+<p><strong>Nivel 2 — total de un cliente</strong> (todas sus órdenes, cada una con sus items — necesitás aplanar con <code>SelectMany</code> antes de sumar):</p>
+<pre><code>var customerTotals = await _context.Customers
+    .Select(c =&gt; new
+    {
+        Customer = c,
+        Total = c.Orders
+            .Where(o =&gt; o.Status == "Shipped")
+            .SelectMany(o =&gt; o.Items)                      // aplana Orders→Items en una sola secuencia
+            .Sum(oi =&gt; oi.Quantity * oi.UnitPrice)
+    })
+    .ToListAsync();
+</code></pre>
+
+<p><strong>Ahora el caso real: clientes con gasto por encima del promedio.</strong> Acá el promedio depende de los totales de <em>todos</em> los clientes — no lo podés calcular dentro del mismo <code>Where</code> sin antes tenerlo resuelto. Dos formas válidas:</p>
+
+<p>(a) <strong>Dos queries — la forma recomendada, más legible:</strong></p>
+<pre><code>var average = await _context.Customers
+    .Select(c =&gt; c.Orders.Where(o =&gt; o.Status == "Shipped")
+                          .SelectMany(o =&gt; o.Items)
+                          .Sum(oi =&gt; oi.Quantity * oi.UnitPrice))
+    .AverageAsync();
+
+var aboveAverage = await _context.Customers
+    .Where(c =&gt; c.Orders.Where(o =&gt; o.Status == "Shipped")
+                         .SelectMany(o =&gt; o.Items)
+                         .Sum(oi =&gt; oi.Quantity * oi.UnitPrice) &gt; average)
+    .ToListAsync();
+</code></pre>
+
+<div class="callout tip">
+Dos round-trips a la base de datos no es un error de performance acá — es la opción correcta. Cada query es simple, se traduce a SQL predecible, y es fácil de leer/debuggear. Intentar forzarlo en una sola query (ver (b) abajo) gana un round-trip pero pierde legibilidad — en una entrevista, preferí poder explicar por qué elegiste la versión simple antes que mostrar la más "clever".
+</div>
+
+<p>(b) <strong>Una sola query, con el promedio inline</strong> — más parecido a la subquery correlacionada de T-SQL que viste en la lección 8. EF Core a veces puede traducir esto a un único SQL con subquery escalar, pero es más frágil (puede fallar la traducción según la versión de EF Core, y es más difícil de leer):</p>
+<pre><code>var aboveAverage = await _context.Customers
+    .Where(c =&gt; c.Orders.Where(o =&gt; o.Status == "Shipped")
+                         .SelectMany(o =&gt; o.Items)
+                         .Sum(oi =&gt; oi.Quantity * oi.UnitPrice)
+                &gt; _context.Customers.Average(c2 =&gt;
+                    c2.Orders.Where(o =&gt; o.Status == "Shipped")
+                             .SelectMany(o =&gt; o.Items)
+                             .Sum(oi =&gt; oi.Quantity * oi.UnitPrice)))
+    .ToListAsync();
+</code></pre>
+
+<h2>Ejercicio práctico</h2>
+<p>Sin mirar arriba: escribí una consulta LINQ contra <code>_context.Orders</code> que devuelva los pedidos de un cliente específico (<code>customerId</code>) cuyo total — calculado desde sus <code>OrderItems</code>, no un campo guardado — sea mayor a 500, ordenados por fecha descendente.</p>
+
+<div class="quiz-recall">
+  <p class="quiz-q">Compará tu respuesta antes de seguir.</p>
+  <button class="quiz-reveal-btn">Mostrar respuesta</button>
+  <p class="quiz-answer" hidden><pre><code>var orders = await _context.Orders
+    .Where(o =&gt; o.CustomerId == customerId
+        &amp;&amp; o.Items.Sum(oi =&gt; oi.Quantity * oi.UnitPrice) &gt; 500)
+    .OrderByDescending(o =&gt; o.OrderDate)
+    .ToListAsync();</code></pre></p>
+</div>
+
+<h2>Retrieval practice</h2>
+<div class="quiz-mc" data-correct="2">
+  <p class="quiz-q">Necesitás pasar un valor variable dentro de un <code>FromSqlRaw</code>. ¿Cuál es la forma segura?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Concatenar el valor directo en el string con +</button>
+    <button class="quiz-opt">Usar interpolación de C# con $"..." normal, sin FromSqlInterpolated</button>
+    <button class="quiz-opt">FromSqlInterpolated, o FromSqlRaw con los valores como argumentos extra</button>
+    <button class="quiz-opt">No se puede pasar un valor variable, solo literales fijos</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="1">
+  <p class="quiz-q">Un stored procedure devuelve columnas que no corresponden a ninguna entidad completa de tu modelo. ¿Qué necesitás para mapear el resultado?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Nada especial, EF Core lo infiere solo</button>
+    <button class="quiz-opt">Un tipo "keyless" (HasNoKey) registrado en OnModelCreating</button>
+    <button class="quiz-opt">Convertir el stored procedure en una vista</button>
+    <button class="quiz-opt">Un DbSet normal como cualquier entidad</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="quiz-mc" data-correct="0">
+  <p class="quiz-q">¿Por qué <code>Order</code> no tiene un campo <code>Total</code> guardado en la base de datos?</p>
+  <div class="quiz-options">
+    <button class="quiz-opt">Porque se puede desincronizar con los OrderItems si no se actualiza a mano</button>
+    <button class="quiz-opt">Porque SQL Server no soporta columnas calculadas</button>
+    <button class="quiz-opt">Porque LINQ no puede leer columnas decimal</button>
+    <button class="quiz-opt">Porque EF Core lo prohíbe por convención</button>
+  </div>
+  <p class="quiz-feedback"></p>
+</div>
+
+<div class="ask-agent">
+Si al traducir el ejercicio 5 o 6 de la lección 8 (subqueries, COUNT DISTINCT) a LINQ te trabás con la sintaxis de <code>SelectMany</code>, pegame tu intento — es más fácil corregir sobre algo escrito que explicar en abstracto.
+</div>
+
+<div class="nav">
+  <a href="0008-tsql-joins-practice.html">← Lección 8: práctica de JOINs</a>
+  <a href="0000-project-roadmap.html">Índice</a>
+  <a href="0010-repository-structure.html">Siguiente: organizando Models y Repositories →</a>
+</div>
+<script src="../assets/quiz.js"></script>

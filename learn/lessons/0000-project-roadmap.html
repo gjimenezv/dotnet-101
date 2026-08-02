@@ -13,8 +13,8 @@ Vos creás el proyecto. Yo no voy a tocar tu carpeta ni escribir tus modelos/mig
 <table>
 <tr><th>Pide el posting</th><th>Se practica en</th><th>Se demuestra en</th></tr>
 <tr><td>APIs/backend robustas en C# y .NET</td><td>Lecciones 1, 2, 3, 4</td><td>Tu proyecto: Controllers</td></tr>
-<tr><td>SQL Server / T-SQL, queries y stored procedures</td><td>Lecciones 5, 6, 8</td><td>SQL Server real (container Docker) + endpoints con LINQ, <code>FromSqlRaw</code> y stored procedures</td></tr>
-<tr><td>Entity Framework y repository/data access pattern</td><td>Lecciones 4, 6, 7, 9</td><td>Tu <code>DbContext</code>, tus migraciones, tu carpeta <code>Repositories/</code></td></tr>
+<tr><td>SQL Server / T-SQL, queries y stored procedures</td><td>Lecciones 5, 8, 9</td><td>SQL Server real (container Docker) + endpoints con LINQ, <code>FromSqlRaw</code> y stored procedures</td></tr>
+<tr><td>Entity Framework y repository/data access pattern</td><td>Lecciones 4, 6, 7, 10</td><td>Tu <code>DbContext</code>, tus migraciones, tu carpeta <code>Repositories/</code></td></tr>
 <tr><td>Code review, debugging, calidad</td><td>Implícito en cada checkpoint (reviso lo que escribís antes de avanzar)</td><td>—</td></tr>
 </table>
 <p class="source">Ver <code>MISSION.md</code> para el detalle completo de objetivos y qué quedó fuera de alcance (React, AWS, Jenkins) por la ventana de tiempo.</p>
@@ -37,22 +37,22 @@ No hay datos de ejemplo acá a propósito — para no perder tiempo inventando f
 </div>
 
 <h2>3. Endpoints — combinando LINQ, SQL crudo y stored procedures</h2>
-<p>De menor a mayor complejidad. La columna "Técnica" no es sugerencia libre — es a propósito para que practiques las 3 formas de tocar la base de datos que EF Core permite (lección 6, sección 5).</p>
+<p>De menor a mayor complejidad. La columna "Técnica" no es sugerencia libre — es a propósito para que practiques las 3 formas de tocar la base de datos que EF Core permite (<a href="0009-ef-core-advanced-querying.html">lección 9</a>).</p>
 <table>
 <tr><th>#</th><th>Endpoint</th><th>Técnica</th><th>Nota</th></tr>
 <tr><td>1</td><td><code>GET /products</code></td><td>LINQ</td><td>Listado simple con <code>.Include(Category)</code></td></tr>
 <tr><td>2</td><td><code>GET /customers/{id}</code></td><td>LINQ</td><td>Con sus Orders y los Items de cada Order (<code>.Include().ThenInclude()</code>)</td></tr>
 <tr><td>3</td><td><code>GET /customers/top-spenders?minOrders=N</code></td><td>LINQ</td><td><code>GroupBy</code> + filtro por cantidad de órdenes</td></tr>
-<tr><td>4</td><td><code>GET /customers/above-average</code></td><td>LINQ</td><td>Gasto total sobre el promedio general. <code>Order</code> no tiene <code>Total</code> guardado — se calcula anidado desde <code>OrderItem</code> (ver <a href="0006-ef-core-repository-pattern.html">lección 6, sección 6</a>); el promedio se calcula como valor separado, LINQ no hace subquery correlacionada implícita</td></tr>
-<tr><td>5</td><td><code>POST /orders</code></td><td>LINQ (write)</td><td>Crear una Order con sus OrderItems en un solo <code>SaveChangesAsync()</code> — practica el tracking de un grafo de entidades, no una sola tabla</td></tr>
-<tr><td>6</td><td><code>GET /customers/top-by-orders?minOrders=N</code></td><td>Stored procedure</td><td>Llamá el <code>GetTopCustomers</code> que ya escribiste en la lección 5, desde C#, con un tipo keyless (lección 6, sección 5)</td></tr>
+<tr><td>4</td><td><code>GET /customers/above-average</code></td><td>LINQ</td><td>Gasto total sobre el promedio general. <code>Order</code> no tiene <code>Total</code> guardado — se calcula anidado desde <code>OrderItem</code> (ver <a href="0009-ef-core-advanced-querying.html">lección 9</a>); el promedio se calcula como valor separado, LINQ no hace subquery correlacionada implícita</td></tr>
+<tr><td>5</td><td><code>POST /orders</code></td><td>LINQ (write)</td><td>Crear una Order con sus OrderItems en un solo <code>SaveChangesAsync()</code> — practica el tracking de un grafo de entidades, no una sola tabla. Es el único endpoint con lógica de negocio real (ver sección 5) — va detrás de un <code>OrderService</code>, no directo Controller→Repository</td></tr>
+<tr><td>6</td><td><code>GET /customers/top-by-orders?minOrders=N</code></td><td>Stored procedure</td><td>Llamá el <code>GetTopCustomers</code> que ya escribiste en la lección 5, desde C#, con un tipo keyless (<a href="0009-ef-core-advanced-querying.html">lección 9</a>)</td></tr>
 <tr><td>7</td><td><code>PATCH /orders/{id}/cancel</code></td><td>SQL crudo (write)</td><td><code>ExecuteSqlInterpolatedAsync</code> con un <code>UPDATE Orders SET Status = 'Cancelled' WHERE Id = {id}</code> — la contraparte de escritura de <code>FromSqlRaw</code></td></tr>
 <tr><td>8</td><td><code>GET /employees/{id}/manager-chain</code></td><td>SQL crudo</td><td>Self-join o CTE recursivo vía <code>FromSqlRaw</code> — LINQ no soporta recursión nativa</td></tr>
 <tr><td>9</td><td><code>GET /products/top-per-category</code></td><td>SQL crudo</td><td><code>RANK() OVER (PARTITION BY CategoryId ORDER BY ...)</code> vía <code>FromSqlRaw</code> — LINQ no tiene window functions</td></tr>
 </table>
 
 <h2>4. Repositories — qué entidades los necesitan</h2>
-<p>Regla de la <a href="0009-repository-structure.html">lección 9</a>: un repository por entidad que tenga sentido pedir/guardar <em>por sí sola</em>.</p>
+<p>Regla de la <a href="0010-repository-structure.html">lección 10</a>: un repository por entidad que tenga sentido pedir/guardar <em>por sí sola</em>.</p>
 <table>
 <tr><th>Entidad</th><th>¿Repository propio?</th></tr>
 <tr><td>Customer, Employee, Product, Order</td><td>Sí</td></tr>
@@ -60,7 +60,69 @@ No hay datos de ejemplo acá a propósito — para no perder tiempo inventando f
 <tr><td>Category</td><td>Decisión tuya — justificá cuál sea</td></tr>
 </table>
 
-<h2>5. Lección → qué te da → qué deberías poder hacer después</h2>
+<h2>5. Services — la única pieza que sí lo necesita</h2>
+<p>De los 9 endpoints, 8 son un Repository, una operación, sin decisiones que tomar — Controller → Repository directo, como viste en el <a href="0010-repository-structure.html">diagrama de la lección 10</a>. Uno solo junta lógica de negocio real que no es ni un query ni una respuesta HTTP: <code>POST /orders</code> (#5 arriba). Ahí sí va un <code>OrderService</code> entre el Controller y los Repositories.</p>
+
+<p>Qué hace que crear una Order sea distinto de los otros 8 endpoints:</p>
+<table>
+<tr><th>Regla</th><th>Por qué no es solo un Repository</th></tr>
+<tr><td>Cada <code>ProductId</code> de la request debe existir</td><td>Es una validación de negocio — decide si la operación completa falla o sigue, no es "traer datos"</td></tr>
+<tr><td><code>OrderItem.UnitPrice</code> se copia del <code>Product.Price</code> vigente al momento de crear la orden, no se referencia en vivo</td><td>Regla de integridad histórica: si el precio del producto cambia después, las órdenes viejas no deben cambiar de precio con él — por eso <code>UnitPrice</code> existe como columna propia en <code>OrderItem</code> en vez de leerse siempre de <code>Product.Price</code></td></tr>
+<tr><td>La operación toca dos aggregate roots (<code>Product</code> para leer, <code>Order</code> para escribir)</td><td>Un Repository solo conoce su propio aggregate — coordinar dos es orquestación, no acceso a datos</td></tr>
+</table>
+
+<pre><code>public interface IOrderService
+{
+    Task&lt;Order&gt; PlaceOrderAsync(CreateOrderRequest request);
+}
+
+public class OrderService : IOrderService
+{
+    private readonly IOrderRepository _orders;
+    private readonly IProductRepository _products;
+
+    public OrderService(IOrderRepository orders, IProductRepository products)
+    {
+        _orders = orders;
+        _products = products;
+    }
+
+    public async Task&lt;Order&gt; PlaceOrderAsync(CreateOrderRequest request)
+    {
+        var items = new List&lt;OrderItem&gt;();
+
+        foreach (var line in request.Items)
+        {
+            var product = await _products.GetByIdAsync(line.ProductId)
+                ?? throw new InvalidOperationException($"Product {line.ProductId} no existe");
+
+            items.Add(new OrderItem
+            {
+                ProductId = product.Id,
+                Quantity = line.Quantity,
+                UnitPrice = product.Price // snapshot, no referencia en vivo
+            });
+        }
+
+        var order = new Order
+        {
+            CustomerId = request.CustomerId,
+            OrderDate = DateTime.UtcNow,
+            Status = "Pending",
+            OrderItems = items
+        };
+
+        return await _orders.CreateAsync(order);
+    }
+}
+</code></pre>
+<p>Registro en <code>Program.cs</code>, igual que un repository: <code>builder.Services.AddScoped&lt;IOrderService, OrderService&gt;();</code>. El <code>OrdersController</code> queda finito: recibe el DTO, llama a <code>_orderService.PlaceOrderAsync(request)</code>, devuelve <code>201 Created</code> — no sabe nada de precios ni de productos.</p>
+
+<div class="callout tip">
+Los otros 8 endpoints no ganan nada metiendo un Service de por medio — son un Repository, una operación, sin reglas que decidir. Meter un Service en cada endpoint "porque sí" es el mismo error dogmático que el <a href="0010-repository-structure.html">callout de la lección 10</a> señala para repositories: se vuelve boilerplate sin propósito. La pregunta que decide (paralela a la de aggregate root en repositories): "¿esta operación coordina más de un repository, o decide algo que no es una query?" Si no, Controller → Repository directo alcanza.
+</div>
+
+<h2>6. Lección → qué te da → qué deberías poder hacer después</h2>
 <table>
 <tr><th>Lección</th><th>Te da</th><th>Después podés...</th></tr>
 <tr><td><a href="0001-csharp-fundamentals-for-js-devs.html">1. C# para JS devs</a></td><td>Sintaxis básica, tipos, LINQ vs array methods</td><td>Leer cualquier archivo <code>.cs</code> sin trabarte en sintaxis</td></tr>
@@ -71,17 +133,19 @@ No hay datos de ejemplo acá a propósito — para no perder tiempo inventando f
 <tr><td><a href="0006-ef-core-repository-pattern.html">6. EF Core + repository pattern</a></td><td>DbContext, DbSet, LINQ, cuándo usar repository</td><td>Escribir tu <code>DbContext</code> con las 6 entidades de la sección 2</td></tr>
 <tr><td><a href="0007-migrations.html">7. Migraciones paso a paso</a></td><td>Ciclo completo: modelo → migración → base de datos real, con <code>Category</code> de ejemplo</td><td>Migrar el resto de tus entidades vos solo</td></tr>
 <tr><td><a href="0008-tsql-joins-practice.html">8. Práctica de JOINs</a></td><td>6 ejercicios con motor SQL real en el navegador</td><td>Escribir en T-SQL las queries que después traducís a LINQ en tus endpoints</td></tr>
-<tr><td><a href="0009-repository-structure.html">9. Organizando Repositories</a></td><td>Aggregate roots, estructura de carpetas, cuándo mezclar con DbContext directo</td><td>Armar tu carpeta <code>Repositories/</code> con criterio</td></tr>
+<tr><td><a href="0009-ef-core-advanced-querying.html">9. SQL crudo, stored procedures y queries anidadas</a></td><td><code>FromSqlRaw</code>/<code>ExecuteSqlRaw</code>, tipos keyless, agregaciones anidadas (sum de sum)</td><td>Resolver los endpoints de la sección 3 que LINQ solo no puede</td></tr>
+<tr><td><a href="0010-repository-structure.html">10. Organizando Repositories</a></td><td>Aggregate roots, estructura de carpetas, cuándo mezclar con DbContext directo</td><td>Armar tu carpeta <code>Repositories/</code> con criterio</td></tr>
 </table>
 
-<h2>6. Tu progreso (marcalo vos, esto no se actualiza solo)</h2>
+<h2>7. Tu progreso (marcalo vos, esto no se actualiza solo)</h2>
 <ul>
 <li>☐ Proyecto creado con <code>dotnet new webapi</code>, compila (lección 4)</li>
 <li>☐ Connection string propia apuntando a SQL Server real (lección 4)</li>
 <li>☐ Las 6 entidades definidas en <code>Models/</code> (lección 6)</li>
 <li>☐ <code>DbContext</code> con los 6 <code>DbSet</code> (lección 6)</li>
 <li>☐ Migraciones generadas y aplicadas — tablas reales en SQL Server (lección 7)</li>
-<li>☐ Repositories para las entidades que correspondan (lección 9)</li>
+<li>☐ Repositories para las entidades que correspondan (lección 10)</li>
+<li>☐ <code>OrderService</code> armado, <code>OrdersController</code> lo usa en vez de hablarle directo al repository (sección 5)</li>
 <li>☐ Los 9 endpoints de la sección 3 — LINQ, SQL crudo y stored procedure, en orden de complejidad</li>
 </ul>
 
