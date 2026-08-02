@@ -1,4 +1,5 @@
 using dotnet_101.DTOs;
+using dotnet_101.Extensions;
 using dotnet_101.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
@@ -25,20 +26,7 @@ namespace dotnet_101.Controllers
                 customer.City,
                 customer.JoinedDate,
                 customer.Orders.Select(o => 
-                    new OrderDto(
-                        o.Id,
-                        o.Status,
-                        o.OrderDate,
-                        o.OrderItems.Select(oi => 
-                            new OrderItemDto(
-                                oi.Id,
-                                oi.Quantity,
-                                oi.UnitPrice,
-                                oi.ProductId,
-                                oi.OrderId
-                            )
-                        ).ToList()
-                    )
+                    o.ToDto()
                 ).ToList()
             );
         }
