@@ -7,4 +7,9 @@ namespace dotnet_101.DTOs
         DateTime OrderDate,
         List<OrderItemDto> Items
     );
+
+    public record CreateOrderRequest(
+        int CustomerId,
+        List<CreateOrderItemRequest> Items
+    );
 }
